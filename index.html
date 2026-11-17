@@ -223,6 +223,11 @@ details.box[open] { padding-bottom: 1.1rem; }
 .fc-counts div { background: var(--surface); border-radius: 8px; padding: 0.7rem 0.8rem; }
 .fc-counts b { display: block; font-family: var(--serif); font-weight: 500; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .fc-counts span { color: var(--muted); font-size: 0.88rem; }
+.ck-counts .ck-lock b { color: var(--good, #2E7D4F); }
+.ck-counts .ck-redo b { color: var(--bad, #B3261E); }
+.ck-line { margin: -0.6rem 0 1rem; color: var(--muted); font-size: 0.92rem; }
+.ck-lists h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
+.c-ear { font-size: 2.6rem; line-height: 1; }
 .fc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; margin: 0 0 1rem; }
 .fc-label { font-weight: 700; min-width: 6.5rem; }
 .stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--line); border-radius: 999px; }
@@ -526,6 +531,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
               <button type="button" data-dir="it" aria-pressed="true">Italian</button>
               <button type="button" data-dir="en" aria-pressed="false">English</button>
               <button type="button" data-dir="mix" aria-pressed="false">Mixed</button>
+              <button type="button" data-dir="ear" aria-pressed="false">Sound only</button>
             </span>
           </div>
           <div class="fc-row">
@@ -601,6 +607,46 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
           </div>
         </div>
         <p id="fc-save" class="hint" role="status"></p>
+      </section>
+
+      <section id="ck-sec" aria-labelledby="ck-h">
+        <h2 id="ck-h">Real check</h2>
+        <p class="hint">Find out which words you really know. Every word comes up twice, with at least an hour in between, Italian to English. Right both times: <b>Locked in</b>, and it counts as Known in your flashcards. Right once: <b>Almost</b>. Missed both times: <b>Start over</b>, and it goes back to Hard in your flashcards. Stop whenever you want and pick up where you left off.</p>
+        <div class="fc-counts ck-counts">
+          <div class="ck-lock"><b id="ck-n-lock">0</b><span>Locked in</span></div>
+          <div><b id="ck-n-close">0</b><span>Almost</span></div>
+          <div class="ck-redo"><b id="ck-n-redo">0</b><span>Start over</span></div>
+        </div>
+        <p class="ck-line" id="ck-line"></p>
+        <div id="ck-setup">
+          <button type="button" id="ck-start" class="bigbtn">Start checking</button>
+          <p class="hint" id="ck-note"></p>
+        </div>
+        <div id="ck-active" hidden>
+          <p class="sort-meta"><span id="ck-tag"></span><span id="ck-pos"></span></p>
+          <button type="button" id="ck-card" class="card" aria-pressed="false">
+            <span class="card-inner">
+              <span class="face front"><span id="ck-q" class="c-it" lang="it"></span><span class="c-tip">Tap to check</span></span>
+              <span class="face back"><span class="c-small" id="ck-q2" lang="it"></span><span class="fc-big-en" id="ck-a"></span></span>
+            </span>
+          </button>
+          <div class="pr-play fc-play" id="ck-play">
+            <button type="button" id="ck-say" class="textbtn">Play</button>
+            <button type="button" id="ck-say-slow" class="textbtn">Play slowly</button>
+          </div>
+          <div class="fbtns">
+            <button type="button" class="fbtn f-got" id="ck-got">Got it</button>
+            <button type="button" class="fbtn f-miss" id="ck-miss">Missed</button>
+          </div>
+          <div class="sort-tools">
+            <button type="button" id="ck-undo" class="textbtn">Undo last answer</button>
+            <button type="button" id="ck-end" class="textbtn">Stop for now</button>
+          </div>
+        </div>
+        <details class="box ck-lists" id="ck-lists">
+          <summary>See the words in each pool</summary>
+          <div id="ck-lists-body"></div>
+        </details>
       </section>
 
       <section id="fc-scores-sec">
@@ -736,7 +782,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611170500';
+  var APP_VERSION = '202611170808';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -775,11 +821,19 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     });
     return { days: Object.keys(by).sort().map(function (k) { return by[k]; }), goal: (seed && seed.goal) || 21600 };
   }
+  function ckOk(x) { return x && typeof x.it === 'string' && typeof x.a === 'string' && !/[^01]/.test(x.a); }
+  function ckWins(a, b) { return !b || a.a.length > b.a.length || (a.a.length === b.a.length && n(a.s) > n(b.s)); }
+  function mergeCheck(seed, local) {
+    var by = {};
+    arr(seed && seed.words).concat(arr(local && local.words)).forEach(function (x) { if (ckOk(x) && ckWins(x, by[x.it])) by[x.it] = x; });
+    return { words: Object.keys(by).map(function (k) { return by[k]; }) };
+  }
   function view(seed, path) {
     var s = (seed.docs || {})[path], l = lsGet(path);
     if (path === 'flash/stats') return mergeStats(s, l);
     if (path === 'time/stats') return mergeTime(s, l);
     if (path === 'flash/later' || path === 'practice/stats') return l || s;
+    if (path === 'check/stats') return mergeCheck(s, l);
     return s;
   }
   function snap(v) { return { exists: !!v, data: function () { return v; } }; }
@@ -817,13 +871,18 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var tm = mergeTime(s['time/stats'], lsGet('time/stats')), baseT = {};
     arr(s['time/stats'] && s['time/stats'].days).forEach(function (d) { if (d && d.d) baseT[d.d] = d; });
     var time = tm.days.filter(function (d) { var b = baseT[d.d] || {}; return Math.round(d.fc) > n(b.fc) || Math.round(d.pr) > n(b.pr); })
-      .map(function (d) { return { d: d.d, fc: Math.round(d.fc), pr: Math.round(d.pr) }; });
+      .map(function (d) { var b = baseT[d.d] || {}; return { d: d.d, fc: Math.round(d.fc), pr: Math.round(d.pr), u: Math.max(0, Math.round(d.fc - n(b.fc) + d.pr - n(b.pr))) }; });
+    var cBase = {};
+    arr(s['check/stats'] && s['check/stats'].words).forEach(function (x) { if (ckOk(x)) cBase[x.it] = x; });
+    var check = mergeCheck(s['check/stats'], lsGet('check/stats')).words.filter(function (x) { return x !== cBase[x.it] && ckWins(x, cBase[x.it]); })
+      .map(function (x) { return { it: x.it, a: x.a, s: n(x.s) }; });
     var later = lsGet('flash/later');
     var out = { v: 1, app: APP_VERSION, data: seed.generated || '', at: new Date().toISOString(), words: words, days: days, time: time };
     if (later) out.later = arr(later.words);
+    if (check.length) out.check = check;
     return out;
   }
-  function mins(r) { return Math.round(r.time.reduce(function (a, d) { return a + d.fc + d.pr; }, 0) / 60); }
+  function mins(r) { return Math.round(r.time.reduce(function (a, d) { return a + d.u; }, 0) / 60); }
 
   document.addEventListener('DOMContentLoaded', function () {
     var anchor = document.getElementById('fc-save');
@@ -839,13 +898,14 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     function refresh() {
       seedP.then(function (seed) {
         var r = results(seed);
-        document.getElementById('off-sum').textContent = r.words.length
-          ? r.words.length + ' words practised and ' + mins(r) + ' minutes not sent to Claude yet. When you are back online, tap Copy and paste it in your Learning Italian chat.'
+        document.getElementById('off-sum').textContent = (r.words.length || r.check)
+          ? r.words.length + ' words practised' + (r.check ? ', ' + r.check.length + ' word checks' : '') + ' and ' + mins(r) + ' minutes not sent to Claude yet. When you are back online, tap Copy and paste it in your Learning Italian chat.'
           : 'Nothing new to send. Works with no internet once added to your Home Screen.';
       });
     }
     refresh();
     setInterval(refresh, 15000);
+    document.addEventListener('click', function () { setTimeout(refresh, 1500); });
     document.addEventListener('visibilitychange', refresh);
     document.getElementById('off-copy').addEventListener('click', function () {
       seedP.then(function (seed) {
@@ -1432,7 +1492,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     fcEx = localStorage.getItem('fc-ex') === '1';
     if (localStorage.getItem('fc-snd') === '0') fcSnd = false;
     var sd = localStorage.getItem('fc-dir');
-    if (sd === 'it' || sd === 'en' || sd === 'mix') fcDir = sd;
+    if (sd === 'it' || sd === 'en' || sd === 'mix' || sd === 'ear') fcDir = sd;
   } catch (e) {}
 
   function norm(v) {
@@ -1626,6 +1686,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   }
 
   function fcRefresh() {
+    ckRefresh();
     var c = fcCounts();
     var scoreWords = fcAllWords(), inScores = {};
     scoreWords.forEach(function (w) { inScores[w.it] = 1; });
@@ -1752,7 +1813,12 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var c = round.queue[0];
     var w = c.w;
     var q = $('fc-q'), q2 = $('fc-q2'), a = $('fc-a');
-    if (c.dir === 'it') {
+    if (c.dir === 'ear') {
+      // Sound only: no word on the front, just the voice
+      q.className = 'c-ear'; q.lang = 'en'; q.textContent = '\uD83D\uDD0A';
+      q2.lang = 'it'; q2.textContent = w.it;
+      a.lang = 'en'; a.textContent = w.en;
+    } else if (c.dir === 'it') {
       q.className = 'c-it'; q.lang = 'it'; q.textContent = w.it;
       q2.lang = 'it'; q2.textContent = w.it;
       a.lang = 'en'; a.textContent = w.en;
@@ -1771,10 +1837,10 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     if (again) { var t = el('span', 'fc-tag', again); $('fc-tag').appendChild(t); }
     $('fc-pos').textContent = left + ' left';
     fcFlip(false, true);
-    $('fc-play').hidden = !fcSnd;
+    $('fc-play').hidden = !fcSnd && c.dir !== 'ear';
     $('fc-say-ex').hidden = true;
-    if (fcSnd && c.dir === 'it') prSpeak(w.it, 0.85);
-    $('fc-card').setAttribute('aria-label', (c.dir === 'it' ? w.it : w.en) + '. Tap to check.');
+    if ((fcSnd && c.dir === 'it') || c.dir === 'ear') prSpeak(w.it, 0.85);
+    $('fc-card').setAttribute('aria-label', (c.dir === 'ear' ? 'Listen to the word' : (c.dir === 'it' ? w.it : w.en)) + '. Tap to check.');
     fcRefresh();
   }
   function fcStart(repeat) {
@@ -1897,6 +1963,213 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     });
   }
 
+
+  // ----- Real check: every word twice, at least an hour apart; saved in check/stats as { it, a: '1'/'0' answers, s: time }
+  var ck = {}, ckRef = null, ckDirty = false, ckSaving = false, ckTimer = null, ckRun = null, ckUndoList = [], ckFlipped = false;
+  var CK_GAP = 3600000;
+  function ckEntry(it) { return ck[it] || { a: '', s: 0 }; }
+  function ckNorm(x) {
+    if (!x || typeof x.a !== 'string' || /[^01]/.test(x.a)) return null;
+    return { a: x.a.slice(0, 2), s: num(x.s) };
+  }
+  function ckBetter(a, b) { return !b || a.a.length > b.a.length || (a.a.length === b.a.length && a.s > b.s); }
+  function ckLocalSave() {
+    try { localStorage.setItem('ck-stats', JSON.stringify(ck)); localStorage.setItem('ck-dirty', ckDirty ? '1' : ''); } catch (e) {}
+  }
+  function ckPush() {
+    if (!ckDirty || !ckRef || ckSaving) return;
+    ckSaving = true;
+    tmo(ckRef.get()).then(function (snap) {
+      if (snap.exists) arr((snap.data() || {}).words).forEach(function (x) {
+        var n = ckNorm(x); if (n && x.it && ckBetter(n, ck[x.it])) ck[x.it] = n;
+      });
+      var list = Object.keys(ck).map(function (k) { return { it: k, a: ck[k].a, s: ck[k].s }; });
+      return tmo(ckRef.set({ words: list, updated: new Date().toISOString() }), 15000);
+    }).then(function () { ckSaving = false; ckDirty = false; ckLocalSave(); }, function () { ckSaving = false; });
+  }
+  function ckQueueSave() { if (ckTimer) clearTimeout(ckTimer); ckTimer = setTimeout(function () { ckTimer = null; ckPush(); }, 800); }
+  window.addEventListener('online', function () { ckPush(); });
+  function ckInit(db) {
+    try {
+      var l = JSON.parse(localStorage.getItem('ck-stats') || 'null');
+      if (l && typeof l === 'object') Object.keys(l).forEach(function (k) { var n = ckNorm(l[k]); if (n && ckBetter(n, ck[k])) ck[k] = n; });
+      ckDirty = ckDirty || localStorage.getItem('ck-dirty') === '1';
+    } catch (e) {}
+    if (!db) return;
+    ckRef = db.doc('check/stats');
+    tmo(ckRef.get()).then(function (snap) {
+      if (snap.exists) {
+        bkSave(db, 'check', snap.data());
+        arr((snap.data() || {}).words).forEach(function (x) {
+          var n = ckNorm(x); if (!n || !x.it) return;
+          if (ckBetter(n, ck[x.it])) ck[x.it] = n; else if (ck[x.it].a !== n.a) ckDirty = true;
+        });
+      }
+      ckLocalSave();
+      ckRefresh();
+      if (ckDirty) ckPush();
+    }, function () {});
+  }
+  function ckWords() {
+    var seen = {}, out = [];
+    fcAllWords().forEach(function (w) { if (w && w.it && !seen[w.it]) { seen[w.it] = 1; out.push(w); } });
+    return out;
+  }
+  function ckPools() {
+    var p = { lock: [], close: [], redo: [], onceRight: [], onceMissed: [], none: [], ready: 0, nextAt: 0 };
+    var now = Date.now();
+    ckWords().forEach(function (w) {
+      var e = ckEntry(w.it);
+      if (e.a.length >= 2) p[e.a === '11' ? 'lock' : (e.a === '00' ? 'redo' : 'close')].push(w);
+      else if (e.a.length === 1) {
+        p[e.a === '1' ? 'onceRight' : 'onceMissed'].push(w);
+        if (now - e.s >= CK_GAP) p.ready++;
+        else if (!p.nextAt || e.s + CK_GAP < p.nextAt) p.nextAt = e.s + CK_GAP;
+      } else p.none.push(w);
+    });
+    return p;
+  }
+  function ckQueue() {
+    var now = Date.now(), first = [], second = [];
+    ckWords().forEach(function (w) {
+      var e = ckEntry(w.it);
+      if (!e.a.length) first.push(w);
+      else if (e.a.length === 1 && now - e.s >= CK_GAP) second.push(w);
+    });
+    second.sort(function (x, y) { return ckEntry(x.it).s - ckEntry(y.it).s; });
+    return shuffle(first).concat(second);
+  }
+  function ckWhen(t) {
+    var m = Math.max(1, Math.round((t - Date.now()) / 60000));
+    return m < 60 ? m + (m === 1 ? ' minute' : ' minutes') : Math.round(m / 60) + (Math.round(m / 60) === 1 ? ' hour' : ' hours');
+  }
+  function ckRefresh() {
+    if (!ck || !$('ck-sec')) return;
+    var p = ckPools();
+    $('ck-n-lock').textContent = p.lock.length;
+    $('ck-n-close').textContent = p.close.length;
+    $('ck-n-redo').textContent = p.redo.length;
+    var once = p.onceRight.length + p.onceMissed.length;
+    $('ck-line').textContent = 'Checked once: ' + once + (once ? ' (' + p.onceRight.length + ' right so far)' : '') + '. Not checked yet: ' + p.none.length + '.';
+    var note = '';
+    if (!ckRun) {
+      var avail = p.none.length + p.ready;
+      if (!avail && p.nextAt) note = 'Nothing ready right now. Your next second checks open in ' + ckWhen(p.nextAt) + '.';
+      else if (!avail) note = ckWords().length ? 'All done! Every word has been checked twice.' : '';
+      else note = avail + (avail === 1 ? ' word is' : ' words are') + ' ready to check' + (p.ready ? ' (' + p.ready + ' of them for the second time)' : '') + '.';
+      $('ck-start').disabled = !avail;
+      $('ck-start').textContent = once || p.lock.length + p.close.length + p.redo.length ? 'Keep checking' : 'Start checking';
+    }
+    $('ck-note').textContent = note;
+    $('ck-setup').hidden = !!ckRun;
+    $('ck-active').hidden = !ckRun;
+    $('ck-undo').disabled = !ckUndoList.length;
+    if ($('ck-lists').open) ckLists(p);
+  }
+  function ckLists(p) {
+    var body = $('ck-lists-body');
+    clear(body);
+    [['Locked in', p.lock], ['Almost', p.close], ['Start over', p.redo], ['Checked once, right so far', p.onceRight], ['Checked once, missed so far', p.onceMissed]].forEach(function (g) {
+      body.appendChild(el('h3', '', g[0] + ' (' + g[1].length + ')'));
+      var ul = el('ul', 'fc-miss-list');
+      g[1].slice().sort(function (x, y) { return x.it.localeCompare(y.it, 'it'); }).forEach(function (w) {
+        var li = el('li'); var i = el('span', 'it', w.it); i.lang = 'it';
+        li.appendChild(i); li.appendChild(el('span', 'en', w.en)); ul.appendChild(li);
+      });
+      if (!g[1].length) ul.appendChild(el('li', '', 'None yet'));
+      body.appendChild(ul);
+    });
+  }
+  $('ck-lists').addEventListener('toggle', function () { if ($('ck-lists').open) ckLists(ckPools()); });
+  function ckFlip(on, instant) {
+    var card = $('ck-card');
+    ckFlipped = on;
+    if (instant) card.classList.add('noanim');
+    card.classList.toggle('flipped', on);
+    card.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (instant) { void card.offsetWidth; card.classList.remove('noanim'); }
+  }
+  function ckShow() {
+    if (!ckRun) { ckRefresh(); return; }
+    while (ckRun.queue.length) {
+      var e0 = ckEntry(ckRun.queue[0].it);
+      if (e0.a.length === 0 || (e0.a.length === 1 && Date.now() - e0.s >= CK_GAP)) break;
+      ckRun.queue.shift();
+    }
+    if (!ckRun.queue.length) { ckRun.queue = ckQueue(); }
+    if (!ckRun.queue.length) { ckStop(); return; }
+    var w = ckRun.queue[0];
+    $('ck-q').textContent = w.it;
+    $('ck-q2').textContent = w.it;
+    $('ck-a').textContent = w.en;
+    var e = ckEntry(w.it);
+    $('ck-tag').textContent = e.a.length ? 'Second check' : 'First check';
+    $('ck-pos').textContent = ckRun.done + ' done this time';
+    ckFlip(false, true);
+    $('ck-play').hidden = !fcSnd;
+    if (fcSnd) prSpeak(w.it, 0.85);
+    $('ck-card').setAttribute('aria-label', w.it + '. Tap to check.');
+    ckRefresh();
+  }
+  function ckStart() {
+    tmTick('fc');
+    ckRun = { queue: ckQueue(), done: 0 };
+    ckUndoList = [];
+    ckShow();
+    $('ck-card').focus();
+  }
+  function ckStop() {
+    tmStop('fc');
+    ckRun = null;
+    ckRefresh();
+    ckPush();
+    fcPush();
+  }
+  // When a word finishes its two checks, set its flashcard history: Locked in counts as Known, Start over as Hard
+  function ckApply(it, a) {
+    var e = entry(it), r = (a.charAt(0) === '1' ? 1 : 0) + (a.charAt(1) === '1' ? 1 : 0);
+    fc[it] = { h: a === '11' ? '111' : a, t: e.t + 2, r: e.r + r, s: Date.now() };
+  }
+  function ckAnswer(ok) {
+    tmTick('fc');
+    if (!ckRun || !ckRun.queue.length) return;
+    var w = ckRun.queue.shift(), it = w.it;
+    var prevCk = ck[it] ? { a: ck[it].a, s: ck[it].s } : null;
+    var prevFc = fc[it] ? JSON.parse(JSON.stringify(fc[it])) : null;
+    var a = ckEntry(it).a + (ok ? '1' : '0');
+    ck[it] = { a: a, s: Date.now() };
+    ckDirty = true; ckLocalSave(); ckQueueSave();
+    var d = today();
+    fcDays[d] = (fcDays[d] || 0) + 1;
+    if (a.length === 2) ckApply(it, a);
+    fcDirty = true; fcLocalSave(); fcQueueSave();
+    ckUndoList.push({ w: w, prevCk: prevCk, prevFc: prevFc, day: d });
+    ckRun.done++;
+    ckShow();
+  }
+  function ckUndo() {
+    var u = ckUndoList.pop();
+    if (!u || !ckRun) return;
+    if (u.prevCk) ck[u.w.it] = u.prevCk; else delete ck[u.w.it];
+    if (u.prevFc) fc[u.w.it] = u.prevFc; else delete fc[u.w.it];
+    if (fcDays[u.day]) fcDays[u.day]--;
+    if (!fcDays[u.day]) delete fcDays[u.day];
+    ckDirty = true; ckLocalSave(); ckQueueSave();
+    fcDirty = true; fcLocalSave(); fcQueueSave();
+    ckRun.queue.unshift(u.w);
+    ckRun.done = Math.max(0, ckRun.done - 1);
+    ckShow();
+  }
+  $('ck-start').addEventListener('click', ckStart);
+  $('ck-end').addEventListener('click', ckStop);
+  $('ck-undo').addEventListener('click', ckUndo);
+  $('ck-got').addEventListener('click', function () { ckAnswer(true); });
+  $('ck-miss').addEventListener('click', function () { ckAnswer(false); });
+  $('ck-card').addEventListener('click', function () { tmTick('fc'); if (ckRun) ckFlip(!ckFlipped, false); });
+  $('ck-say').addEventListener('click', function () { if (ckRun && ckRun.queue[0]) prSpeak(ckRun.queue[0].it, 0.85); });
+  $('ck-say-slow').addEventListener('click', function () { if (ckRun && ckRun.queue[0]) prSpeak(ckRun.queue[0].it, 0.55); });
+  setInterval(function () { if (!ckRun) ckRefresh(); }, 60000);
+
   $('fc-card').addEventListener('click', function () {
     tmTick('fc');
     if (!round || round.done) return;
@@ -1990,6 +2263,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     }, function () {});
   }
   function fcInit(db) {
+    ckInit(db);
     var local = fcLoadLocal();
     fcLoadExamples(db);
     try {
@@ -2665,7 +2939,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   }
   var offTimer = setTimeout(goOffline, 10000);
   // Keep trying to save anything waiting, so answers from a flight go up as soon as there's a connection
-  setInterval(function () { if (navigator.onLine !== false) { fcPush(); prPush(); tmPush(); } }, 60000);
+  setInterval(function () { if (navigator.onLine !== false) { fcPush(); prPush(); tmPush(); ckPush(); } }, 60000);
   window.claude.use('db').then(function (db) {
     clearTimeout(offTimer);
     if (!db) { goOffline(); return; }
