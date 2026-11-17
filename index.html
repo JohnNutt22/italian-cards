@@ -482,6 +482,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
         <p class="hint">Your Shaky and Don't Know words. A word counts as known when you got 3 of your last 4 tries right and your last try was right. Known words leave the pile and come back now and then, mixed in with the others.</p>
         <p class="fc-today" id="fc-today"></p>
         <p class="fc-today tm-line" id="fc-time-line"></p>
+        <p class="ck-line" id="fc-locked-line" hidden style="margin:0 0 0.75rem"></p>
         <div class="fc-counts">
           <div><b id="fc-n-learn">0</b><span>To learn</span></div>
           <div><b id="fc-n-new">0</b><span>Not tried yet</span></div>
@@ -611,7 +612,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 
       <section id="ck-sec" aria-labelledby="ck-h">
         <h2 id="ck-h">Real check</h2>
-        <p class="hint">Find out which words you really know. Every word comes up twice, with at least an hour in between, Italian to English. Right both times: <b>Locked in</b>, and it counts as Known in your flashcards. Right once: <b>Almost</b>. Missed both times: <b>Start over</b>, and it goes back to Hard in your flashcards. Stop whenever you want and pick up where you left off.</p>
+        <p class="hint">Find out which words you really know. Every word comes up twice, with at least an hour in between, Italian to English. Right both times: <b>Locked in</b>. Locked in words leave your flashcards and stay locked in. Right once: <b>Almost</b>. Missed both times: <b>Start over</b>. Almost and Start over words go back into your flashcards to practice (as Almost or Hard). Then check them again, until every word is locked in. Stop whenever you want and pick up where you left off.</p>
         <div class="fc-counts ck-counts">
           <div class="ck-lock"><b id="ck-n-lock">0</b><span>Locked in</span></div>
           <div><b id="ck-n-close">0</b><span>Almost</span></div>
@@ -621,6 +622,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
         <div id="ck-setup">
           <button type="button" id="ck-start" class="bigbtn">Start checking</button>
           <p class="hint" id="ck-note"></p>
+          <button type="button" id="ck-again" class="textbtn" hidden></button>
         </div>
         <div id="ck-active" hidden>
           <p class="sort-meta"><span id="ck-tag"></span><span id="ck-pos"></span></p>
@@ -782,7 +784,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611170808';
+  var APP_VERSION = '202611170816';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -822,7 +824,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     return { days: Object.keys(by).sort().map(function (k) { return by[k]; }), goal: (seed && seed.goal) || 21600 };
   }
   function ckOk(x) { return x && typeof x.it === 'string' && typeof x.a === 'string' && !/[^01]/.test(x.a); }
-  function ckWins(a, b) { return !b || a.a.length > b.a.length || (a.a.length === b.a.length && n(a.s) > n(b.s)); }
+  function ckWins(a, b) { if (!b) return true; if (n(a.r) !== n(b.r)) return n(a.r) > n(b.r); return a.a.length > b.a.length || (a.a.length === b.a.length && n(a.s) > n(b.s)); }
   function mergeCheck(seed, local) {
     var by = {};
     arr(seed && seed.words).concat(arr(local && local.words)).forEach(function (x) { if (ckOk(x) && ckWins(x, by[x.it])) by[x.it] = x; });
@@ -875,7 +877,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var cBase = {};
     arr(s['check/stats'] && s['check/stats'].words).forEach(function (x) { if (ckOk(x)) cBase[x.it] = x; });
     var check = mergeCheck(s['check/stats'], lsGet('check/stats')).words.filter(function (x) { return x !== cBase[x.it] && ckWins(x, cBase[x.it]); })
-      .map(function (x) { return { it: x.it, a: x.a, s: n(x.s) }; });
+      .map(function (x) { var o = { it: x.it, a: x.a, s: n(x.s), r: n(x.r) }; if (typeof x.p === 'string') o.p = x.p; return o; });
     var later = lsGet('flash/later');
     var out = { v: 1, app: APP_VERSION, data: seed.generated || '', at: new Date().toISOString(), words: words, days: days, time: time };
     if (later) out.later = arr(later.words);
@@ -1548,7 +1550,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   }
   function fcWords() {
     if (fcFocusMode) return fcFocusWords();
-    return fcAllWords().filter(function (w) { return fcLaterMode ? !!fcLater[w.it] : !fcLater[w.it]; });
+    return fcAllWords().filter(function (w) { return !ckLocked(w.it) && (fcLaterMode ? !!fcLater[w.it] : !fcLater[w.it]); });
   }
   // Focus deck: words he keeps missing in voice drills, chosen in database doc flash/focus. Any status, even Solid or Known.
   function fcFocusWords() {
@@ -1644,6 +1646,10 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     $('fc-n-learn').textContent = learn;
     $('fc-n-new').textContent = untried;
     $('fc-n-known').textContent = known;
+    var nLock = 0;
+    if (ck) Object.keys(ck).forEach(function (k) { if (ck[k].a === '11') nLock++; });
+    $('fc-locked-line').hidden = !nLock;
+    $('fc-locked-line').textContent = nLock + (nLock === 1 ? ' word is' : ' words are') + ' Locked in from your Real check, so they no longer come up here.';
     return { words: words, learn: learn };
   }
 
@@ -1967,12 +1973,20 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   // ----- Real check: every word twice, at least an hour apart; saved in check/stats as { it, a: '1'/'0' answers, s: time }
   var ck = {}, ckRef = null, ckDirty = false, ckSaving = false, ckTimer = null, ckRun = null, ckUndoList = [], ckFlipped = false;
   var CK_GAP = 3600000;
-  function ckEntry(it) { return ck[it] || { a: '', s: 0 }; }
+  function ckEntry(it) { return ck[it] || { a: '', s: 0, r: 0 }; }
   function ckNorm(x) {
     if (!x || typeof x.a !== 'string' || /[^01]/.test(x.a)) return null;
-    return { a: x.a.slice(0, 2), s: num(x.s) };
+    var o = { a: x.a.slice(0, 2), s: num(x.s), r: num(x.r) };
+    if (typeof x.p === 'string') o.p = x.p;
+    return o;
   }
-  function ckBetter(a, b) { return !b || a.a.length > b.a.length || (a.a.length === b.a.length && a.s > b.s); }
+  // A later check round wins, then more answers, then the newer one
+  function ckBetter(a, b) {
+    if (!b) return true;
+    if (num(a.r) !== num(b.r)) return num(a.r) > num(b.r);
+    return a.a.length > b.a.length || (a.a.length === b.a.length && a.s > b.s);
+  }
+  function ckLocked(it) { var e = ck && ck[it]; return !!(e && e.a === '11'); }
   function ckLocalSave() {
     try { localStorage.setItem('ck-stats', JSON.stringify(ck)); localStorage.setItem('ck-dirty', ckDirty ? '1' : ''); } catch (e) {}
   }
@@ -1983,7 +1997,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
       if (snap.exists) arr((snap.data() || {}).words).forEach(function (x) {
         var n = ckNorm(x); if (n && x.it && ckBetter(n, ck[x.it])) ck[x.it] = n;
       });
-      var list = Object.keys(ck).map(function (k) { return { it: k, a: ck[k].a, s: ck[k].s }; });
+      var list = Object.keys(ck).map(function (k) { var o = { it: k, a: ck[k].a, s: ck[k].s, r: num(ck[k].r) }; if (ck[k].p) o.p = ck[k].p; return o; });
       return tmo(ckRef.set({ words: list, updated: new Date().toISOString() }), 15000);
     }).then(function () { ckSaving = false; ckDirty = false; ckLocalSave(); }, function () { ckSaving = false; });
   }
@@ -2002,7 +2016,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
         bkSave(db, 'check', snap.data());
         arr((snap.data() || {}).words).forEach(function (x) {
           var n = ckNorm(x); if (!n || !x.it) return;
-          if (ckBetter(n, ck[x.it])) ck[x.it] = n; else if (ck[x.it].a !== n.a) ckDirty = true;
+          if (ckBetter(n, ck[x.it])) ck[x.it] = n; else if (ck[x.it].a !== n.a || num(ck[x.it].r) !== n.r) ckDirty = true;
         });
       }
       ckLocalSave();
@@ -2050,7 +2064,8 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     $('ck-n-close').textContent = p.close.length;
     $('ck-n-redo').textContent = p.redo.length;
     var once = p.onceRight.length + p.onceMissed.length;
-    $('ck-line').textContent = 'Checked once: ' + once + (once ? ' (' + p.onceRight.length + ' right so far)' : '') + '. Not checked yet: ' + p.none.length + '.';
+    var again = p.none.filter(function (w) { return !!ckEntry(w.it).p; }).length;
+    $('ck-line').textContent = 'Checked once: ' + once + (once ? ' (' + p.onceRight.length + ' right so far)' : '') + '. Not checked yet: ' + p.none.length + (again ? ' (' + again + ' of them for another try)' : '') + '.';
     var note = '';
     if (!ckRun) {
       var avail = p.none.length + p.ready;
@@ -2058,6 +2073,9 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
       else if (!avail) note = ckWords().length ? 'All done! Every word has been checked twice.' : '';
       else note = avail + (avail === 1 ? ' word is' : ' words are') + ' ready to check' + (p.ready ? ' (' + p.ready + ' of them for the second time)' : '') + '.';
       $('ck-start').disabled = !avail;
+      var redo = p.close.length + p.redo.length;
+      $('ck-again').hidden = !redo;
+      $('ck-again').textContent = 'Check my Almost and Start over words again (' + redo + ')';
       $('ck-start').textContent = once || p.lock.length + p.close.length + p.redo.length ? 'Keep checking' : 'Start checking';
     }
     $('ck-note').textContent = note;
@@ -2109,6 +2127,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     $('ck-play').hidden = !fcSnd;
     if (fcSnd) prSpeak(w.it, 0.85);
     $('ck-card').setAttribute('aria-label', w.it + '. Tap to check.');
+    fcCounts();
     ckRefresh();
   }
   function ckStart() {
@@ -2121,14 +2140,9 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   function ckStop() {
     tmStop('fc');
     ckRun = null;
-    ckRefresh();
+    fcRefresh();
     ckPush();
     fcPush();
-  }
-  // When a word finishes its two checks, set its flashcard history: Locked in counts as Known, Start over as Hard
-  function ckApply(it, a) {
-    var e = entry(it), r = (a.charAt(0) === '1' ? 1 : 0) + (a.charAt(1) === '1' ? 1 : 0);
-    fc[it] = { h: a === '11' ? '111' : a, t: e.t + 2, r: e.r + r, s: Date.now() };
   }
   function ckAnswer(ok) {
     tmTick('fc');
@@ -2136,12 +2150,17 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var w = ckRun.queue.shift(), it = w.it;
     var prevCk = ck[it] ? { a: ck[it].a, s: ck[it].s } : null;
     var prevFc = fc[it] ? JSON.parse(JSON.stringify(fc[it])) : null;
-    var a = ckEntry(it).a + (ok ? '1' : '0');
-    ck[it] = { a: a, s: Date.now() };
+    var e0 = ckEntry(it), a = e0.a + (ok ? '1' : '0');
+    ck[it] = { a: a, s: Date.now(), r: num(e0.r) };
+    if (e0.p) ck[it].p = e0.p;
     ckDirty = true; ckLocalSave(); ckQueueSave();
     var d = today();
     fcDays[d] = (fcDays[d] || 0) + 1;
-    if (a.length === 2) ckApply(it, a);
+    // Almost and Start over go back into the flashcard learning pile (Almost or Hard); Locked in leaves the flashcards
+    if (a.length === 2 && a !== '11') {
+      var fe = entry(it);
+      fc[it] = { h: a, t: fe.t + 2, r: fe.r + (a.charAt(0) === '1' ? 1 : 0) + (a.charAt(1) === '1' ? 1 : 0), s: Date.now() };
+    }
     fcDirty = true; fcLocalSave(); fcQueueSave();
     ckUndoList.push({ w: w, prevCk: prevCk, prevFc: prevFc, day: d });
     ckRun.done++;
@@ -2161,6 +2180,17 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     ckShow();
   }
   $('ck-start').addEventListener('click', ckStart);
+  // New round for every word that isn't locked in yet; the last result is kept in p
+  $('ck-again').addEventListener('click', function () {
+    var now = Date.now(), n = 0;
+    ckWords().forEach(function (w) {
+      var e = ckEntry(w.it);
+      if (e.a.length >= 2 && e.a !== '11') { ck[w.it] = { a: '', s: now, r: num(e.r) + 1, p: e.a }; n++; }
+    });
+    if (!n) return;
+    ckDirty = true; ckLocalSave(); ckPush();
+    ckRefresh();
+  });
   $('ck-end').addEventListener('click', ckStop);
   $('ck-undo').addEventListener('click', ckUndo);
   $('ck-got').addEventListener('click', function () { ckAnswer(true); });
