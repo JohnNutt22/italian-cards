@@ -784,7 +784,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611200751';
+  var APP_VERSION = '202611200758';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -1517,7 +1517,9 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var h0 = hist(it), tries = h0.length;
     // Known = 4 of the last 5 tries right, and the last try right (his rule from Nov 20).
     // A Solid word starts with 4 rights already, so one right try keeps it Known; a miss still drops it
-    var h = fcSolid[it] ? '1111' + h0 : h0, last = h.slice(-5), right = 0;
+    // ...but not after a Real check: the check result replaces the old "know it" mark
+    var checked = !!(ck && ck[it] && (ck[it].a.length >= 2 || ck[it].p));
+    var h = fcSolid[it] && !checked ? '1111' + h0 : h0, last = h.slice(-5), right = 0;
     for (var i = 0; i < last.length; i++) if (last.charAt(i) === '1') right++;
     return {
       tries: Math.max(tries, entry(it).t), life: entry(it).r, right: right, n: last.length,
