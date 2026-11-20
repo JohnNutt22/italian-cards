@@ -479,7 +479,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     <div id="view-flash" hidden>
       <section>
         <h2>Flashcards</h2>
-        <p class="hint">Your Shaky and Don't Know words. A word counts as known when you got 3 of your last 4 tries right and your last try was right. Known words leave the pile and come back now and then, mixed in with the others.</p>
+        <p class="hint">Your Shaky and Don't Know words. A word counts as known when you got 4 of your last 5 tries right and your last try was right. Known words leave the pile and come back now and then, mixed in with the others.</p>
         <p class="fc-today" id="fc-today"></p>
         <p class="fc-today tm-line" id="fc-time-line"></p>
         <p class="ck-line" id="fc-locked-line" hidden style="margin:0 0 0.75rem"></p>
@@ -784,7 +784,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611180738';
+  var APP_VERSION = '202611200751';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -1515,13 +1515,14 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   function hist(it) { return entry(it).h; }
   function info(it) {
     var h0 = hist(it), tries = h0.length;
-    // A Solid word starts with 3 rights already, so one right try keeps it Known; a miss still drops it
-    var h = fcSolid[it] ? '111' + h0 : h0, last = h.slice(-4), right = 0;
+    // Known = 4 of the last 5 tries right, and the last try right (his rule from Nov 20).
+    // A Solid word starts with 4 rights already, so one right try keeps it Known; a miss still drops it
+    var h = fcSolid[it] ? '1111' + h0 : h0, last = h.slice(-5), right = 0;
     for (var i = 0; i < last.length; i++) if (last.charAt(i) === '1') right++;
     return {
       tries: Math.max(tries, entry(it).t), life: entry(it).r, right: right, n: last.length,
-      // A Solid word with no flashcard tries yet counts as Known; once tried, the 3-of-4 rule decides (with its 3 head-start rights)
-      known: h.length ? (right >= 3 && h.slice(-1) === '1') : false
+      // A Solid word with no flashcard tries yet counts as Known; once tried, the 4-of-5 rule decides (with its 4 head-start rights)
+      known: h.length ? (right >= 4 && h.slice(-1) === '1') : false
     };
   }
   function level(it) {
