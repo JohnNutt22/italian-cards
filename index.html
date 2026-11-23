@@ -784,7 +784,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611200758';
+  var APP_VERSION = '202611230509';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -1783,8 +1783,15 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     lv.hard.sort(function (a, b) { return a._k - b._k; });
     lv.close.sort(function (a, b) { return a._k - b._k; });
     shuffle(lv['new']);
-    lv.known = lv.known.filter(function (w) { return isDue(w.it); })
-      .sort(function (a, b) { return dueAt(a.it) - dueAt(b.it); });
+    // Known checks: words that are due first, then (so the Known slots are always filled) the ones seen longest ago,
+    // keeping words from the last 2 rounds at the back
+    lv.known.sort(function (a, b) {
+      var da = isDue(a.it) ? 0 : 1, db = isDue(b.it) ? 0 : 1;
+      if (da !== db) return da - db;
+      var ra = fcRecent[a.it] ? 1 : 0, rb = fcRecent[b.it] ? 1 : 0;
+      if (ra !== rb) return ra - rb;
+      return da === 0 ? dueAt(a.it) - dueAt(b.it) : entry(a.it).s - entry(b.it).s;
+    });
     var picked = [], used = {};
     function take(k, n) {
       var got = 0;
@@ -3015,3 +3022,5 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 </script>
 </body>
 </html>
+
+</body></html>
