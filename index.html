@@ -612,7 +612,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 
       <section id="ck-sec" aria-labelledby="ck-h">
         <h2 id="ck-h">Real check</h2>
-        <p class="hint">Find out which words you really know. Every word comes up twice, with at least an hour in between, Italian to English. Right both times: <b>Locked in</b>. Locked in words leave your flashcards and stay locked in. Right once: <b>Almost</b>. Missed both times: <b>Start over</b>. Almost and Start over words go back into your flashcards to practice (as Almost or Hard). Then check them again, until every word is locked in. Stop whenever you want and pick up where you left off.</p>
+        <p class="hint">Find out which words you really know. Every word comes up twice, Italian to English: first you go through all of them once, then each one again. Right both times: <b>Locked in</b>. Locked in words leave your flashcards and stay locked in. Right once: <b>Almost</b>. Missed both times: <b>Start over</b>. Almost and Start over words go back into your flashcards to practice (as Almost or Hard). Then check them again, until every word is locked in. Stop whenever you want and pick up where you left off.</p>
         <div class="fc-counts ck-counts">
           <div class="ck-lock"><b id="ck-n-lock">0</b><span>Locked in</span></div>
           <div><b id="ck-n-close">0</b><span>Almost</span></div>
@@ -785,7 +785,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611260727';
+  var APP_VERSION = '202611260755';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -1983,7 +1983,8 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 
   // ----- Real check: every word twice, at least an hour apart; saved in check/stats as { it, a: '1'/'0' answers, s: time }
   var ck = {}, ckRef = null, ckDirty = false, ckSaving = false, ckTimer = null, ckRun = null, ckUndoList = [], ckFlipped = false;
-  var CK_GAP = 3600000;
+  // No wait between the two checks (his choice, Nov 25); first checks for every word still come before any second check
+  var CK_GAP = 0;
   function ckEntry(it) { return ck[it] || { a: '', s: 0, r: 0 }; }
   function ckNorm(x) {
     if (!x || typeof x.a !== 'string' || /[^01]/.test(x.a)) return null;
@@ -2092,7 +2093,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var p = ckPools();
     var ri = ckRoundInfo();
     $('ck-round').hidden = !ri;
-    if (ri) $('ck-round').textContent = 'Round ' + ri.n + ': ' + ri.lock.length + ' of ' + ri.total + ' locked in' +
+    if (ri) $('ck-round').textContent = 'This round: ' + ri.lock.length + ' of ' + ri.total + ' locked in' +
       (ri.close.length ? ', ' + ri.close.length + ' Almost' : '') + (ri.redo.length ? ', ' + ri.redo.length + ' Start over' : '') +
       (ri.left ? ', ' + ri.left + ' still to finish' : '') + '.';
     $('ck-n-lock').textContent = p.lock.length;
@@ -2109,7 +2110,8 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
       else note = avail + (avail === 1 ? ' word is' : ' words are') + ' ready to check' + (p.ready ? ' (' + p.ready + ' of them for the second time)' : '') + '.';
       $('ck-start').disabled = !avail;
       var rw = ckRedoWords(), redo = rw.length;
-      $('ck-again').hidden = !redo;
+      // Only offer a new round once this round is finished
+      $('ck-again').hidden = !redo || !!(ri && ri.left);
       $('ck-again').textContent = 'Check my Almost and Start over words again (' + redo + ')';
       if (redo && !avail) {
         var kn = rw.filter(function (w) { return level(w.it) === 'known'; }).length;
@@ -2129,7 +2131,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var body = $('ck-lists-body');
     clear(body);
     var ri = ckRoundInfo(), groups = [];
-    if (ri) groups.push(['Locked in this round (round ' + ri.n + ')', ri.lock], ['Almost this round', ri.close], ['Start over this round', ri.redo]);
+    if (ri) groups.push(['Locked in this round', ri.lock], ['Almost this round', ri.close], ['Start over this round', ri.redo]);
     groups.concat([['All Locked in', p.lock], ['Almost', p.close], ['Start over', p.redo], ['Checked once, right so far', p.onceRight], ['Checked once, missed so far', p.onceMissed]]).forEach(function (g) {
       body.appendChild(el('h3', '', g[0] + ' (' + g[1].length + ')'));
       var ul = el('ul', 'fc-miss-list');
