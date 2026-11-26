@@ -785,7 +785,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611260755';
+  var APP_VERSION = '202611260828';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -2195,7 +2195,10 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var w = ckRun.queue.shift(), it = w.it;
     var prevCk = ck[it] ? { a: ck[it].a, s: ck[it].s } : null;
     var prevFc = fc[it] ? JSON.parse(JSON.stringify(fc[it])) : null;
-    var e0 = ckEntry(it), a = e0.a + (ok ? '1' : '0');
+    var e0 = ckEntry(it);
+    // A word already checked twice this round doesn't take a third answer
+    if (e0.a.length >= 2) { ckShow(); return; }
+    var a = e0.a + (ok ? '1' : '0');
     ck[it] = { a: a, s: Date.now(), r: num(e0.r) };
     if (e0.p) ck[it].p = e0.p;
     ckDirty = true; ckLocalSave(); ckQueueSave();
