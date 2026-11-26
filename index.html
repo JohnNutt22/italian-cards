@@ -619,6 +619,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
           <div class="ck-redo"><b id="ck-n-redo">0</b><span>Start over</span></div>
         </div>
         <p class="ck-line" id="ck-line"></p>
+        <p class="fc-today" id="ck-round" hidden style="margin:-0.4rem 0 1rem"></p>
         <div id="ck-setup">
           <button type="button" id="ck-start" class="bigbtn">Start checking</button>
           <p class="hint" id="ck-note"></p>
@@ -784,7 +785,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611231950';
+  var APP_VERSION = '202611260727';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -2067,9 +2068,33 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var m = Math.max(1, Math.round((t - Date.now()) / 60000));
     return m < 60 ? m + (m === 1 ? ' minute' : ' minutes') : Math.round(m / 60) + (Math.round(m / 60) === 1 ? ' hour' : ' hours');
   }
+  // The latest check-again round (r = 1 is the second round, and so on) and how it's going
+  function ckRoundInfo() {
+    var maxR = 0;
+    Object.keys(ck).forEach(function (k) { if (num(ck[k].r) > maxR) maxR = num(ck[k].r); });
+    if (!maxR) return null;
+    var o = { n: maxR + 1, lock: [], close: [], redo: [], left: 0, total: 0 };
+    ckWords().forEach(function (w) {
+      var e = ckEntry(w.it);
+      if (num(e.r) !== maxR) return;
+      o.total++;
+      if (e.a.length < 2) o.left++;
+      else o[e.a === '11' ? 'lock' : (e.a === '00' ? 'redo' : 'close')].push(w);
+    });
+    return o;
+  }
+  // Words waiting for another check: Almost or Start over, not in the Later pile
+  function ckRedoWords() {
+    return ckWords().filter(function (w) { var e = ckEntry(w.it); return e.a.length >= 2 && e.a !== '11' && !fcLater[w.it]; });
+  }
   function ckRefresh() {
     if (!ck || !$('ck-sec')) return;
     var p = ckPools();
+    var ri = ckRoundInfo();
+    $('ck-round').hidden = !ri;
+    if (ri) $('ck-round').textContent = 'Round ' + ri.n + ': ' + ri.lock.length + ' of ' + ri.total + ' locked in' +
+      (ri.close.length ? ', ' + ri.close.length + ' Almost' : '') + (ri.redo.length ? ', ' + ri.redo.length + ' Start over' : '') +
+      (ri.left ? ', ' + ri.left + ' still to finish' : '') + '.';
     $('ck-n-lock').textContent = p.lock.length;
     $('ck-n-close').textContent = p.close.length;
     $('ck-n-redo').textContent = p.redo.length;
@@ -2083,9 +2108,15 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
       else if (!avail) note = ckWords().length ? 'All done! Every word has been checked twice.' : '';
       else note = avail + (avail === 1 ? ' word is' : ' words are') + ' ready to check' + (p.ready ? ' (' + p.ready + ' of them for the second time)' : '') + '.';
       $('ck-start').disabled = !avail;
-      var redo = p.close.length + p.redo.length;
+      var rw = ckRedoWords(), redo = rw.length;
       $('ck-again').hidden = !redo;
       $('ck-again').textContent = 'Check my Almost and Start over words again (' + redo + ')';
+      if (redo && !avail) {
+        var kn = rw.filter(function (w) { return level(w.it) === 'known'; }).length;
+        note = kn === redo
+          ? 'All ' + redo + ' are Known in your flashcards. Ready to check them again!'
+          : kn + ' of ' + redo + ' are Known in your flashcards so far. Check them again when all ' + redo + ' are Known.';
+      }
       $('ck-start').textContent = once || p.lock.length + p.close.length + p.redo.length ? 'Keep checking' : 'Start checking';
     }
     $('ck-note').textContent = note;
@@ -2097,7 +2128,9 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   function ckLists(p) {
     var body = $('ck-lists-body');
     clear(body);
-    [['Locked in', p.lock], ['Almost', p.close], ['Start over', p.redo], ['Checked once, right so far', p.onceRight], ['Checked once, missed so far', p.onceMissed]].forEach(function (g) {
+    var ri = ckRoundInfo(), groups = [];
+    if (ri) groups.push(['Locked in this round (round ' + ri.n + ')', ri.lock], ['Almost this round', ri.close], ['Start over this round', ri.redo]);
+    groups.concat([['All Locked in', p.lock], ['Almost', p.close], ['Start over', p.redo], ['Checked once, right so far', p.onceRight], ['Checked once, missed so far', p.onceMissed]]).forEach(function (g) {
       body.appendChild(el('h3', '', g[0] + ' (' + g[1].length + ')'));
       var ul = el('ul', 'fc-miss-list');
       g[1].slice().sort(function (x, y) { return x.it.localeCompare(y.it, 'it'); }).forEach(function (w) {
@@ -2195,7 +2228,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var now = Date.now(), n = 0;
     ckWords().forEach(function (w) {
       var e = ckEntry(w.it);
-      if (e.a.length >= 2 && e.a !== '11') { ck[w.it] = { a: '', s: now, r: num(e.r) + 1, p: e.a }; n++; }
+      if (e.a.length >= 2 && e.a !== '11' && !fcLater[w.it]) { ck[w.it] = { a: '', s: now, r: num(e.r) + 1, p: e.a }; n++; }
     });
     if (!n) return;
     ckDirty = true; ckLocalSave(); ckPush();
