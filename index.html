@@ -228,6 +228,11 @@ details.box[open] { padding-bottom: 1.1rem; }
 .ck-line { margin: -0.6rem 0 1rem; color: var(--muted); font-size: 0.92rem; }
 .ck-lists h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
 .c-ear { font-size: 2.6rem; line-height: 1; }
+.rv-box { background: var(--surface); border-radius: 10px; padding: 1rem 1.1rem; margin: 0 0 1.25rem; border-left: 4px solid var(--new); }
+.rv-box.rv-done { border-left-color: var(--solid); }
+.rv-box h3 { margin: 0 0 0.3rem; font-size: 1.1rem; }
+.rv-box p { margin: 0 0 0.8rem; }
+.rv-box p:last-child { margin-bottom: 0; }
 .fc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; margin: 0 0 1rem; }
 .fc-label { font-weight: 700; min-width: 6.5rem; }
 .stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--line); border-radius: 999px; }
@@ -489,6 +494,11 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
           <div><b id="fc-n-known">0</b><span>Known</span></div>
         </div>
 
+        <div id="rv-box" class="rv-box" hidden>
+          <h3 id="rv-title">Morning review</h3>
+          <p id="rv-text"></p>
+          <button type="button" id="rv-start" class="bigbtn">Start morning review</button>
+        </div>
         <div id="fc-setup">
           <p class="hint">Choose how many words from each level go in a round. Hard means under half right so far. Almost means half or more right, but not known yet.</p>
           <div class="mix">
@@ -785,7 +795,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611260830';
+  var APP_VERSION = '202611260919';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -831,12 +841,18 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     arr(seed && seed.words).concat(arr(local && local.words)).forEach(function (x) { if (ckOk(x) && ckWins(x, by[x.it])) by[x.it] = x; });
     return { words: Object.keys(by).map(function (k) { return by[k]; }) };
   }
+  function mergeReview(seed, local) {
+    var by = {};
+    arr(seed && seed.days).concat(arr(local && local.days)).forEach(function (x) { if (x && x.d && (!by[x.d] || n(x.at) > n(by[x.d].at))) by[x.d] = x; });
+    return { days: Object.keys(by).sort().map(function (k) { return by[k]; }) };
+  }
   function view(seed, path) {
     var s = (seed.docs || {})[path], l = lsGet(path);
     if (path === 'flash/stats') return mergeStats(s, l);
     if (path === 'time/stats') return mergeTime(s, l);
     if (path === 'flash/later' || path === 'practice/stats') return l || s;
     if (path === 'check/stats') return mergeCheck(s, l);
+    if (path === 'review/stats') return mergeReview(s, l);
     return s;
   }
   function snap(v) { return { exists: !!v, data: function () { return v; } }; }
@@ -883,6 +899,10 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var out = { v: 1, app: APP_VERSION, data: seed.generated || '', at: new Date().toISOString(), words: words, days: days, time: time };
     if (later) out.later = arr(later.words);
     if (check.length) out.check = check;
+    var rBase = {};
+    arr(s['review/stats'] && s['review/stats'].days).forEach(function (x) { if (x && x.d) rBase[x.d] = n(x.at); });
+    var review = mergeReview(s['review/stats'], lsGet('review/stats')).days.filter(function (x) { return n(x.at) > (rBase[x.d] || 0); });
+    if (review.length) out.review = review;
     return out;
   }
   function mins(r) { return Math.round(r.time.reduce(function (a, d) { return a + d.u; }, 0) / 60); }
@@ -901,7 +921,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     function refresh() {
       seedP.then(function (seed) {
         var r = results(seed);
-        document.getElementById('off-sum').textContent = (r.words.length || r.check)
+        document.getElementById('off-sum').textContent = (r.words.length || r.check || r.review)
           ? r.words.length + ' words practised' + (r.check ? ', ' + r.check.length + ' word checks' : '') + ' and ' + mins(r) + ' minutes not sent to Claude yet. When you are back online, tap Copy and paste it in your Learning Italian chat.'
           : 'Nothing new to send. Works with no internet once added to your Home Screen.';
       });
@@ -1754,6 +1774,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
       b.setAttribute('aria-pressed', b.getAttribute('data-dir') === fcDir ? 'true' : 'false');
     });
     var inRound = !!(round && !round.done);
+    rvRefresh(inRound);
     $('fc-setup').hidden = inRound || !!(round && round.done);
     $('fc-active').hidden = !inRound;
     $('fc-result').hidden = !(round && round.done);
@@ -1860,9 +1881,10 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     $('fc-card').setAttribute('aria-label', (c.dir === 'ear' ? 'Listen to the word' : (c.dir === 'it' ? w.it : w.en)) + '. Tap to check.');
     fcRefresh();
   }
-  function fcStart(repeat) {
-    var cards;
-    if (repeat && round && round.cards) {
+  function fcStart(repeat, custom) {
+    var cards, morning = !!custom || !!(repeat && round && round.morning);
+    if (custom) cards = custom;
+    else if (repeat && round && round.cards) {
       cards = shuffle(round.cards.map(function (c) {
         return { w: c.w, review: c.review, dir: fcDir === 'mix' ? (Math.random() < 0.5 ? 'it' : 'en') : fcDir };
       }));
@@ -1870,7 +1892,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     if (!cards.length) return;
     var before = {};
     cards.forEach(function (c) { before[c.w.it] = info(c.w.it).known; });
-    round = { queue: cards.slice(), cards: cards.slice(), seen: {}, first: {}, total: cards.length, before: before, done: false };
+    round = { queue: cards.slice(), cards: cards.slice(), seen: {}, first: {}, total: cards.length, before: before, done: false, morning: morning };
     tmTick('fc');
     if (!repeat) {
       fcRecentRounds.push(cards.map(function (c) { return c.w.it; }));
@@ -1904,6 +1926,11 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var newKnown = keys.filter(function (k) { return !round.before[k] && info(k).known; }).length;
     var lost = keys.filter(function (k) { return round.before[k] && !info(k).known; }).length;
     var msg = right + ' of ' + keys.length + ' right the first time.';
+    if (round.morning && !rv.days[today()]) {
+      rv.days[today()] = { d: today(), at: Date.now(), n: keys.length, right: right };
+      rvDirty = true; rvLocalSave(); rvPush();
+      msg = 'Morning review done! ' + msg;
+    }
     if (newKnown) msg += ' ' + newKnown + (newKnown === 1 ? ' word is' : ' words are') + ' now known.';
     if (lost) msg += ' ' + lost + (lost === 1 ? ' known word went' : ' known words went') + ' back in the pile.';
     $('fc-result-text').textContent = msg;
@@ -1980,6 +2007,114 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     });
   }
 
+
+
+  // ----- Morning review: the words from last night's practice, once through the next morning
+  // Saved in review/stats { days: [{ d, at, n, right }] }; voice-session words come from review/voice { words: [{ it, t }] }
+  var rv = { days: {} }, rvVoice = [], rvRef = null, rvDirty = false, rvSaving = false;
+  var RV_SLEEP = 3 * 3600000, RV_MAX = 30;
+  function rvMergeDays(list) {
+    arr(list).forEach(function (x) {
+      if (x && typeof x.d === 'string' && (!rv.days[x.d] || num(x.at) > num(rv.days[x.d].at)))
+        rv.days[x.d] = { d: x.d, at: num(x.at), n: num(x.n), right: num(x.right) };
+    });
+  }
+  function rvLocalSave() {
+    try {
+      localStorage.setItem('rv-stats', JSON.stringify(Object.keys(rv.days).map(function (k) { return rv.days[k]; })));
+      localStorage.setItem('rv-dirty', rvDirty ? '1' : '');
+    } catch (e) {}
+  }
+  function rvPush() {
+    if (!rvDirty || !rvRef || rvSaving) return;
+    rvSaving = true;
+    tmo(rvRef.get()).then(function (snap) {
+      if (snap.exists) rvMergeDays((snap.data() || {}).days);
+      return tmo(rvRef.set({ days: Object.keys(rv.days).sort().map(function (k) { return rv.days[k]; }), updated: new Date().toISOString() }), 15000);
+    }).then(function () { rvSaving = false; rvDirty = false; rvLocalSave(); }, function () { rvSaving = false; });
+  }
+  window.addEventListener('online', function () { rvPush(); });
+  function rvInit(db) {
+    try {
+      rvMergeDays(JSON.parse(localStorage.getItem('rv-stats') || 'null'));
+      rvDirty = rvDirty || localStorage.getItem('rv-dirty') === '1';
+      var v = JSON.parse(localStorage.getItem('rv-voice') || 'null');
+      if (Array.isArray(v)) rvVoice = v;
+    } catch (e) {}
+    if (!db) return;
+    rvRef = db.doc('review/stats');
+    tmo(rvRef.get()).then(function (snap) {
+      if (snap.exists) rvMergeDays((snap.data() || {}).days);
+      rvLocalSave(); fcRefresh();
+      if (rvDirty) rvPush();
+    }, function () {});
+    tmo(db.doc('review/voice').get()).then(function (snap) {
+      if (!snap.exists) return;
+      rvVoice = arr((snap.data() || {}).words).filter(function (x) { return x && typeof x.it === 'string'; });
+      try { localStorage.setItem('rv-voice', JSON.stringify(rvVoice)); } catch (e) {}
+      fcRefresh();
+    }, function () {});
+  }
+  // Words practised since the last morning review (or the last 30 hours), leaving out the last 3 hours so they've been slept on
+  function rvWords() {
+    var now = Date.now(), last = 0;
+    Object.keys(rv.days).forEach(function (k) { if (num(rv.days[k].at) > last) last = num(rv.days[k].at); });
+    var from = Math.max(last, now - 30 * 3600000), to = now - RV_SLEEP;
+    var when = {}, missed = {};
+    function see(it, t, lastOk) {
+      if (!it || !(t > from && t <= to)) return;
+      if (!when[it] || t > when[it]) { when[it] = t; missed[it] = !lastOk; }
+    }
+    Object.keys(fc).forEach(function (it) { var e = fc[it]; see(it, num(e.s), (e.h || '').slice(-1) !== '0'); });
+    if (ck) Object.keys(ck).forEach(function (it) { var e = ck[it]; if (e.a) see(it, num(e.s), e.a.slice(-1) !== '0'); });
+    rvVoice.forEach(function (x) { see(x.it, num(x.t), !x.miss); });
+    var byIt = {};
+    ckWords().forEach(function (w) { byIt[w.it] = w; });
+    var list = Object.keys(when).filter(function (it) { return byIt[it]; }).map(function (it) { return byIt[it]; });
+    list = shuffle(list);
+    list.sort(function (a, b) { return (missed[b.it] ? 1 : 0) - (missed[a.it] ? 1 : 0); });
+    return list;
+  }
+  function rvStreak() {
+    var st = 0, day = new Date();
+    if (!rv.days[today()]) day.setDate(day.getDate() - 1);
+    for (var g = 0; g < 400; g++) {
+      var key = day.getFullYear() + '-' + ('0' + (day.getMonth() + 1)).slice(-2) + '-' + ('0' + day.getDate()).slice(-2);
+      if (!rv.days[key]) break;
+      st++; day.setDate(day.getDate() - 1);
+    }
+    return st;
+  }
+  function rvRefresh(inRound) {
+    var box = $('rv-box');
+    if (!box || !rv) return;
+    var done = rv.days[today()], st = rvStreak();
+    var streak = st > 1 ? ' ' + st + ' mornings in a row.' : '';
+    if (inRound || !fcLoaded) { box.hidden = true; return; }
+    if (done) {
+      box.hidden = false; box.classList.add('rv-done');
+      $('rv-title').textContent = 'Morning review done ✓';
+      $('rv-text').textContent = done.right + ' of ' + done.n + ' right the first time.' + streak;
+      $('rv-start').hidden = true;
+      return;
+    }
+    var list = rvWords();
+    box.classList.remove('rv-done');
+    $('rv-title').textContent = 'Morning review';
+    if (!list.length) { box.hidden = true; return; }
+    box.hidden = false;
+    var n = Math.min(list.length, RV_MAX);
+    $('rv-text').textContent = n + (n === 1 ? ' word' : ' words') + ' from last night' + (list.length > n ? ' (the ' + n + ' that need it most, of ' + list.length + ')' : '') +
+      '. Go through them once to lock in what you learned before you slept.' + streak;
+    $('rv-start').hidden = false;
+  }
+  $('rv-start').addEventListener('click', function () {
+    var list = rvWords().slice(0, RV_MAX);
+    if (!list.length) return;
+    fcStart(false, shuffle(list.map(function (w) {
+      return { w: w, review: false, dir: fcDir === 'mix' ? (Math.random() < 0.5 ? 'it' : 'en') : fcDir };
+    })));
+  });
 
   // ----- Real check: every word twice, at least an hour apart; saved in check/stats as { it, a: '1'/'0' answers, s: time }
   var ck = {}, ckRef = null, ckDirty = false, ckSaving = false, ckTimer = null, ckRun = null, ckUndoList = [], ckFlipped = false;
@@ -2342,6 +2477,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   }
   function fcInit(db) {
     ckInit(db);
+    rvInit(db);
     var local = fcLoadLocal();
     fcLoadExamples(db);
     try {
@@ -3017,7 +3153,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   }
   var offTimer = setTimeout(goOffline, 10000);
   // Keep trying to save anything waiting, so answers from a flight go up as soon as there's a connection
-  setInterval(function () { if (navigator.onLine !== false) { fcPush(); prPush(); tmPush(); ckPush(); } }, 60000);
+  setInterval(function () { if (navigator.onLine !== false) { fcPush(); prPush(); tmPush(); ckPush(); rvPush(); } }, 60000);
   window.claude.use('db').then(function (db) {
     clearTimeout(offTimer);
     if (!db) { goOffline(); return; }
