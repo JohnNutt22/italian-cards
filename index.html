@@ -883,7 +883,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611280843';
+  var APP_VERSION = '202611280846';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -2109,9 +2109,9 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 
   // ----- Sound cards: listening only, with their own scores in sound/stats { words: [{ it, h, t, r, s }], days: [{ d, n }] }
   var sd = {}, sdDays = {}, sdRef = null, sdDirty = false, sdSaving = false, sdTimer = null, sdRound = null, sdUndo = [], sdFlipped = false;
-  var sdMix = { 'new': 8, hard: 4, close: 3, known: 2 };
+  var sdMix = { 'new': 6, hard: 3, close: 2, known: 1 };
   try {
-    var sm0 = JSON.parse(localStorage.getItem('sd-mix') || 'null');
+    var sm0 = JSON.parse(localStorage.getItem('sd-mix2') || 'null');
     if (sm0) ['new', 'hard', 'close', 'known'].forEach(function (k) { var v = parseInt(sm0[k], 10); if (v >= 0 && v <= 50) sdMix[k] = v; });
   } catch (e) {}
   function sdTotal() { return sdMix['new'] + sdMix.hard + sdMix.close + sdMix.known; }
@@ -2326,7 +2326,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     b.addEventListener('click', function () {
       var k = b.getAttribute('data-sdlv');
       sdMix[k] = Math.max(0, Math.min(50, sdMix[k] + parseInt(b.getAttribute('data-d'), 10)));
-      try { localStorage.setItem('sd-mix', JSON.stringify(sdMix)); } catch (e) {}
+      try { localStorage.setItem('sd-mix2', JSON.stringify(sdMix)); } catch (e) {}
       sdRefresh();
     });
   });
