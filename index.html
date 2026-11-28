@@ -680,6 +680,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
         <h2>Sound cards</h2>
         <p class="hint">Listen only. The card is blank and the word plays by itself. Say what it means, then tap the card to see the Italian and the English. These scores are separate from your reading flashcards and start from zero. A word is known by ear when 4 of your last 5 tries are right and the last one is right.</p>
         <p class="fc-today" id="sd-today"></p>
+        <p class="fc-today tm-line" id="sd-time-line"></p>
         <div class="fc-counts">
           <div><b id="sd-n-learn">0</b><span>To learn</span></div>
           <div><b id="sd-n-new">0</b><span>Not heard yet</span></div>
@@ -883,7 +884,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611280846';
+  var APP_VERSION = '202611280852';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -1536,6 +1537,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var line = 'This week: ' + tmFmt(week) + ' of 6h' + (left ? '' : ' ✓');
     if ($('fc-time-line')) $('fc-time-line').textContent = line + '  ·  Today: ' + tmFmt(todayT);
     if ($('pr-time-line')) $('pr-time-line').textContent = line + '  ·  Today: ' + tmFmt(todayT);
+    if ($('sd-time-line')) $('sd-time-line').textContent = line + '  ·  Today: ' + tmFmt(todayT);
     $('tm-week').textContent = tmFmt(week);
     $('tm-goal-text').textContent = 'of 6h this week';
     $('tm-bar-fill').style.width = pct + '%';
@@ -2116,6 +2118,14 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   } catch (e) {}
   function sdTotal() { return sdMix['new'] + sdMix.hard + sdMix.close + sdMix.known; }
   function sdEntry(it) { return sd[it] || { h: '', t: 0, r: 0, s: 0 }; }
+  // This session: active time (gaps over 2 minutes don't count) and cards; a 30-minute break starts a new session
+  var sdSess = { secs: 0, cards: 0, last: 0 };
+  function sdSessTick() {
+    var now = Date.now();
+    if (sdSess.last && now - sdSess.last > 30 * 60000) sdSess = { secs: 0, cards: 0, last: 0 };
+    if (sdSess.last && now - sdSess.last <= 120000) sdSess.secs += (now - sdSess.last) / 1000;
+    sdSess.last = now;
+  }
   function sdNorm(x) {
     if (!x || typeof x.h !== 'string' || /[^01]/.test(x.h)) return null;
     return { h: x.h.slice(-20), t: num(x.t), r: num(x.r), s: num(x.s) };
@@ -2210,7 +2220,13 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     });
     $('sd-total').textContent = sdTotal() + ' cards per round';
     var dn = sdDays[today()] || 0;
-    $('sd-today').textContent = 'Today: ' + dn + (dn === 1 ? ' sound card' : ' sound cards');
+    var t = $('sd-today'); clear(t);
+    t.appendChild(document.createTextNode('Today: ' + dn + (dn === 1 ? ' sound card' : ' sound cards')));
+    if (sdSess.cards) {
+      var m = Math.floor(sdSess.secs / 60), sec = Math.floor(sdSess.secs % 60);
+      var tx = m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm ' + ('0' + sec).slice(-2) + 's';
+      t.appendChild(el('span', '', 'This session: ' + tx + '  ·  ' + sdSess.cards + (sdSess.cards === 1 ? ' card' : ' cards')));
+    }
     var inRound = !!(sdRound && !sdRound.done);
     $('sd-setup').hidden = inRound || !!(sdRound && sdRound.done);
     $('sd-active').hidden = !inRound;
@@ -2250,6 +2266,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     sdRound = { queue: words.slice(), words: words.slice(), seen: {}, first: {}, total: words.length, before: before, done: false };
     sdUndo = [];
     tmTick('fc');
+    sdSessTick();
     sdShow();
     $('sd-card').focus();
   }
@@ -2262,10 +2279,12 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   }
   function sdAnswer(ok) {
     tmTick('fc');
+    sdSessTick();
     if (!sdRound || sdRound.done) return;
     var w = sdRound.queue.shift(), it = w.it, first = !sdRound.seen[it], pos = -1;
     var prev = sd[it] ? JSON.parse(JSON.stringify(sd[it])) : null;
     if (first) { sdRound.seen[it] = 1; sdRound.first[it] = ok; sdRecord(it, ok); }
+    sdSess.cards++;
     if (!ok) {
       // A missed word comes back a few cards later, at a random spot
       var len = sdRound.queue.length, min = Math.min(3, len);
@@ -2319,7 +2338,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   $('sd-miss').addEventListener('click', function () { sdAnswer(false); });
   $('sd-undo').addEventListener('click', sdUndoLast);
   $('sd-end').addEventListener('click', sdEnd);
-  $('sd-card').addEventListener('click', function () { tmTick('fc'); if (sdRound && !sdRound.done) sdFlip(!sdFlipped, false); });
+  $('sd-card').addEventListener('click', function () { tmTick('fc'); sdSessTick(); if (sdRound && !sdRound.done) sdFlip(!sdFlipped, false); });
   $('sd-say').addEventListener('click', function () { tmTick('fc'); if (sdRound && sdRound.queue[0]) prSpeak(sdRound.queue[0].it, 0.85); });
   $('sd-say-slow').addEventListener('click', function () { tmTick('fc'); if (sdRound && sdRound.queue[0]) prSpeak(sdRound.queue[0].it, 0.55); });
   Array.prototype.forEach.call(document.querySelectorAll('[data-sdlv]'), function (b) {
