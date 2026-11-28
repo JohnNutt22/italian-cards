@@ -686,15 +686,42 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
           <div><b id="sd-n-known">0</b><span>Known by ear</span></div>
         </div>
         <div id="sd-setup">
-          <div class="fc-row">
-            <span class="fc-label" id="sd-n-label">Cards per round</span>
-            <span class="stepper" role="group" aria-labelledby="sd-n-label">
-              <button type="button" id="sd-minus" aria-label="Fewer cards">&minus;</button>
-              <output id="sd-n" aria-live="polite">15</output>
-              <button type="button" id="sd-plus" aria-label="More cards">+</button>
-            </span>
+          <p class="hint">Choose how many words from each level go in a round. Hard means under half right so far. Almost means half or more right, but not known by ear yet. If a level runs short, the round fills up from the others.</p>
+          <div class="mix">
+            <div class="mix-row">
+              <span class="mix-name"><span class="sw l-new"></span><span><span id="sd-lab-new">Not heard yet</span><span class="mix-av" id="sd-av-new"></span></span></span>
+              <span class="stepper" role="group" aria-labelledby="sd-lab-new">
+                <button type="button" data-sdlv="new" data-d="-1" aria-label="Fewer not heard yet words">&minus;</button>
+                <output id="sd-m-new" aria-live="polite">0</output>
+                <button type="button" data-sdlv="new" data-d="1" aria-label="More not heard yet words">+</button>
+              </span>
+            </div>
+            <div class="mix-row">
+              <span class="mix-name"><span class="sw l-hard"></span><span><span id="sd-lab-hard">Hard</span><span class="mix-av" id="sd-av-hard"></span></span></span>
+              <span class="stepper" role="group" aria-labelledby="sd-lab-hard">
+                <button type="button" data-sdlv="hard" data-d="-1" aria-label="Fewer hard words">&minus;</button>
+                <output id="sd-m-hard" aria-live="polite">0</output>
+                <button type="button" data-sdlv="hard" data-d="1" aria-label="More hard words">+</button>
+              </span>
+            </div>
+            <div class="mix-row">
+              <span class="mix-name"><span class="sw l-close"></span><span><span id="sd-lab-close">Almost</span><span class="mix-av" id="sd-av-close"></span></span></span>
+              <span class="stepper" role="group" aria-labelledby="sd-lab-close">
+                <button type="button" data-sdlv="close" data-d="-1" aria-label="Fewer almost words">&minus;</button>
+                <output id="sd-m-close" aria-live="polite">0</output>
+                <button type="button" data-sdlv="close" data-d="1" aria-label="More almost words">+</button>
+              </span>
+            </div>
+            <div class="mix-row">
+              <span class="mix-name"><span class="sw l-known"></span><span><span id="sd-lab-known">Known by ear</span><span class="mix-av" id="sd-av-known"></span></span></span>
+              <span class="stepper" role="group" aria-labelledby="sd-lab-known">
+                <button type="button" data-sdlv="known" data-d="-1" aria-label="Fewer known by ear words">&minus;</button>
+                <output id="sd-m-known" aria-live="polite">0</output>
+                <button type="button" data-sdlv="known" data-d="1" aria-label="More known by ear words">+</button>
+              </span>
+            </div>
           </div>
-          <p class="hint">Each round mixes words you're still learning, a few you haven't heard yet, and now and then a word you already know by ear.</p>
+          <p class="mix-total" id="sd-total"></p>
           <button type="button" id="sd-start" class="bigbtn">Start round</button>
           <p class="hint" id="sd-note"></p>
         </div>
@@ -856,7 +883,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611280827';
+  var APP_VERSION = '202611280843';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -2082,8 +2109,12 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 
   // ----- Sound cards: listening only, with their own scores in sound/stats { words: [{ it, h, t, r, s }], days: [{ d, n }] }
   var sd = {}, sdDays = {}, sdRef = null, sdDirty = false, sdSaving = false, sdTimer = null, sdRound = null, sdUndo = [], sdFlipped = false;
-  var sdN = 15;
-  try { var sn0 = parseInt(localStorage.getItem('sd-n'), 10); if (sn0 >= 5 && sn0 <= 50) sdN = sn0; } catch (e) {}
+  var sdMix = { 'new': 8, hard: 4, close: 3, known: 2 };
+  try {
+    var sm0 = JSON.parse(localStorage.getItem('sd-mix') || 'null');
+    if (sm0) ['new', 'hard', 'close', 'known'].forEach(function (k) { var v = parseInt(sm0[k], 10); if (v >= 0 && v <= 50) sdMix[k] = v; });
+  } catch (e) {}
+  function sdTotal() { return sdMix['new'] + sdMix.hard + sdMix.close + sdMix.known; }
   function sdEntry(it) { return sd[it] || { h: '', t: 0, r: 0, s: 0 }; }
   function sdNorm(x) {
     if (!x || typeof x.h !== 'string' || /[^01]/.test(x.h)) return null;
@@ -2153,12 +2184,11 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     sdWords().forEach(function (w) { lv[sdLevel(w.it)].push(w); });
     lv.hard = shuffle(lv.hard); lv.close = shuffle(lv.close); lv['new'] = shuffle(lv['new']);
     lv.known.sort(function (a, b) { return sdEntry(a.it).s - sdEntry(b.it).s; });
-    var want = { hard: Math.round(sdN * 0.35), close: Math.round(sdN * 0.3), known: Math.max(1, Math.round(sdN * 0.1)) };
-    want['new'] = sdN - want.hard - want.close - want.known;
-    var out = [], used = {};
+    var total = sdTotal(), out = [], used = {};
     function take(k, n) { lv[k].forEach(function (w) { if (n > 0 && !used[w.it]) { used[w.it] = 1; out.push(w); n--; } }); }
-    ['hard', 'close', 'new', 'known'].forEach(function (k) { take(k, want[k]); });
-    ['hard', 'close', 'new', 'known'].forEach(function (k) { take(k, sdN - out.length); });
+    ['hard', 'close', 'new', 'known'].forEach(function (k) { take(k, sdMix[k]); });
+    // Top up from the learning levels first, then known words
+    ['hard', 'close', 'new', 'known'].forEach(function (k) { take(k, total - out.length); });
     return shuffle(out);
   }
   function sdCounts() {
@@ -2172,14 +2202,20 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     $('sd-n-learn').textContent = c.learn;
     $('sd-n-new').textContent = c['new'];
     $('sd-n-known').textContent = c.known;
-    $('sd-n').textContent = sdN;
+    var av = { 'new': 0, hard: 0, close: 0, known: 0 };
+    sdWords().forEach(function (w) { av[sdLevel(w.it)]++; });
+    ['new', 'hard', 'close', 'known'].forEach(function (k) {
+      $('sd-m-' + k).textContent = sdMix[k];
+      $('sd-av-' + k).textContent = av[k] + (k === 'known' ? ' known' : ' waiting');
+    });
+    $('sd-total').textContent = sdTotal() + ' cards per round';
     var dn = sdDays[today()] || 0;
     $('sd-today').textContent = 'Today: ' + dn + (dn === 1 ? ' sound card' : ' sound cards');
     var inRound = !!(sdRound && !sdRound.done);
     $('sd-setup').hidden = inRound || !!(sdRound && sdRound.done);
     $('sd-active').hidden = !inRound;
     $('sd-result').hidden = !(sdRound && sdRound.done);
-    $('sd-start').disabled = !c.total;
+    $('sd-start').disabled = !c.total || !sdTotal();
     $('sd-note').textContent = !c.total ? 'Loading your words…' : (!window.speechSynthesis ? "This device can't play words aloud here." : '');
     $('sd-undo').disabled = !sdUndo.length;
   }
@@ -2286,8 +2322,14 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   $('sd-card').addEventListener('click', function () { tmTick('fc'); if (sdRound && !sdRound.done) sdFlip(!sdFlipped, false); });
   $('sd-say').addEventListener('click', function () { tmTick('fc'); if (sdRound && sdRound.queue[0]) prSpeak(sdRound.queue[0].it, 0.85); });
   $('sd-say-slow').addEventListener('click', function () { tmTick('fc'); if (sdRound && sdRound.queue[0]) prSpeak(sdRound.queue[0].it, 0.55); });
-  $('sd-minus').addEventListener('click', function () { sdN = Math.max(5, sdN - 5); try { localStorage.setItem('sd-n', sdN); } catch (e) {} sdRefresh(); });
-  $('sd-plus').addEventListener('click', function () { sdN = Math.min(50, sdN + 5); try { localStorage.setItem('sd-n', sdN); } catch (e) {} sdRefresh(); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sdlv]'), function (b) {
+    b.addEventListener('click', function () {
+      var k = b.getAttribute('data-sdlv');
+      sdMix[k] = Math.max(0, Math.min(50, sdMix[k] + parseInt(b.getAttribute('data-d'), 10)));
+      try { localStorage.setItem('sd-mix', JSON.stringify(sdMix)); } catch (e) {}
+      sdRefresh();
+    });
+  });
 
   // ----- Morning review: the words from last night's practice, once through the next morning
   // Saved in review/stats { days: [{ d, at, n, right }] }; voice-session words come from review/voice { words: [{ it, t }] }
