@@ -11,3 +11,5 @@ Scores stay on the phone. Tap "Copy results for Claude" when back online and pas
 2. Save each database doc as `SEED/<collection>/<doc>.json` (progress/current, progress/sort, flash/stats, flash/focus, flash/later, flash/examples, time/stats, practice/stats, check/stats).
 3. Run `python3 rebuild.py PAGE.html SEED` here. It keeps the offline parts from the current `index.html`, bumps the cache version and writes a fresh `data.json`.
 4. Test offline, commit and push. The phone picks up the new version on its second open while online.
+
+Results pasted from the app may include `check`, `review` and `sound` lists. Merge `sound` into the `sound/stats` doc the same way as flash/stats (higher t wins per word, bigger count per day), `check` into check/stats (higher r, then more answers, then later s), and `review` days into review/stats (later at wins).

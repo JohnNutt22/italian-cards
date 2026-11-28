@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <style>
 #tab-practice { display: none !important; }
+.tabs { grid-template-columns: repeat(3, 1fr) !important; }
 .off-box { background: var(--surface); border-radius: 10px; padding: 0.9rem 1rem; margin: 0 0 1.25rem; }
 .off-box p { margin: 0 0 0.6rem; }
 .off-box .row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
@@ -216,8 +217,8 @@ details.box[open] { padding-bottom: 1.1rem; }
 .topic .done { margin: 0 0 1rem; color: var(--muted); font-size: 0.92rem; }
 
 
-.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-top: 1.5rem; padding: 0.3rem; background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px; }
-.tabs button { font: inherit; font-weight: 700; color: var(--muted); background: transparent; border: 0; border-radius: 999px; min-height: 2.8rem; cursor: pointer; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; margin-top: 1.5rem; padding: 0.3rem; background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px; }
+.tabs button { font: inherit; font-size: 0.92rem; font-weight: 700; color: var(--muted); background: transparent; border: 0; border-radius: 999px; min-height: 2.8rem; cursor: pointer; }
 .tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 .fc-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 0 0 1.25rem; }
 .fc-counts div { background: var(--surface); border-radius: 8px; padding: 0.7rem 0.8rem; }
@@ -228,6 +229,9 @@ details.box[open] { padding-bottom: 1.1rem; }
 .ck-line { margin: -0.6rem 0 1rem; color: var(--muted); font-size: 0.92rem; }
 .ck-lists h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
 .c-ear { font-size: 2.6rem; line-height: 1; }
+.sd-listen { color: var(--muted); font-size: 1rem; }
+.sd-it { font-family: var(--sans); font-weight: 700; font-size: clamp(2.1rem, 10vw, 3rem); line-height: 1.15; overflow-wrap: anywhere; }
+.sd-en { color: var(--muted); font-weight: 600; font-size: 1.3rem; }
 .rv-box { background: var(--surface); border-radius: 10px; padding: 1rem 1.1rem; margin: 0 0 1.25rem; border-left: 4px solid var(--new); }
 .rv-box.rv-done { border-left-color: var(--solid); }
 .rv-box h3 { margin: 0 0 0.3rem; font-size: 1.1rem; }
@@ -357,6 +361,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     <nav class="tabs" aria-label="Page">
       <button type="button" id="tab-progress" aria-pressed="true">Progress</button>
       <button type="button" id="tab-flash" aria-pressed="false">Flashcards</button>
+      <button type="button" id="tab-sound" aria-pressed="false">Sound</button>
       <button type="button" id="tab-practice" aria-pressed="false">Practice</button>
     </nav>
     <div id="view-progress">
@@ -670,6 +675,62 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
       </section>
     </div>
 
+    <div id="view-sound" hidden>
+      <section>
+        <h2>Sound cards</h2>
+        <p class="hint">Listen only. The card is blank and the word plays by itself. Say what it means, then tap the card to see the Italian and the English. These scores are separate from your reading flashcards and start from zero. A word is known by ear when 4 of your last 5 tries are right and the last one is right.</p>
+        <p class="fc-today" id="sd-today"></p>
+        <div class="fc-counts">
+          <div><b id="sd-n-learn">0</b><span>To learn</span></div>
+          <div><b id="sd-n-new">0</b><span>Not heard yet</span></div>
+          <div><b id="sd-n-known">0</b><span>Known by ear</span></div>
+        </div>
+        <div id="sd-setup">
+          <div class="fc-row">
+            <span class="fc-label" id="sd-n-label">Cards per round</span>
+            <span class="stepper" role="group" aria-labelledby="sd-n-label">
+              <button type="button" id="sd-minus" aria-label="Fewer cards">&minus;</button>
+              <output id="sd-n" aria-live="polite">15</output>
+              <button type="button" id="sd-plus" aria-label="More cards">+</button>
+            </span>
+          </div>
+          <p class="hint">Each round mixes words you're still learning, a few you haven't heard yet, and now and then a word you already know by ear.</p>
+          <button type="button" id="sd-start" class="bigbtn">Start round</button>
+          <p class="hint" id="sd-note"></p>
+        </div>
+        <div id="sd-active" hidden>
+          <p class="sort-meta"><span id="sd-tag"></span><span id="sd-pos"></span></p>
+          <button type="button" id="sd-card" class="card" aria-pressed="false">
+            <span class="card-inner">
+              <span class="face front"><span class="sd-listen">Listen, then tap to check</span></span>
+              <span class="face back"><span class="sd-it" id="sd-it" lang="it"></span><span class="sd-en" id="sd-en"></span></span>
+            </span>
+          </button>
+          <div class="pr-play fc-play">
+            <button type="button" id="sd-say" class="textbtn">Play again</button>
+            <button type="button" id="sd-say-slow" class="textbtn">Play slowly</button>
+          </div>
+          <div class="fbtns">
+            <button type="button" class="fbtn f-got" id="sd-got">Got it</button>
+            <button type="button" class="fbtn f-miss" id="sd-miss">Missed</button>
+          </div>
+          <div class="sort-tools">
+            <button type="button" id="sd-undo" class="textbtn">Undo last answer</button>
+            <button type="button" id="sd-end" class="textbtn">End round</button>
+          </div>
+        </div>
+        <div id="sd-result" class="fc-done" hidden>
+          <p id="sd-result-text"></p>
+          <ul id="sd-missed" class="fc-miss-list"></ul>
+          <div class="fc-row">
+            <button type="button" id="sd-again" class="bigbtn">New round</button>
+            <button type="button" id="sd-repeat" class="textbtn" style="margin:0">Repeat this round</button>
+          </div>
+        </div>
+        <p id="sd-save" class="hint" role="status"></p>
+      </section>
+    </div>
+
     <div id="view-practice" hidden>
       <section>
         <h2>Practice in sentences</h2>
@@ -795,7 +856,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 <script>
 // Offline home-screen version: a local stand-in for Claude's database, seeded from data.json
 (function () {
-  var APP_VERSION = '202611280801';
+  var APP_VERSION = '202611280817';
   try { var t0 = localStorage.getItem('tab'); if (!t0 || t0 === 'practice') localStorage.setItem('tab', 'flash'); } catch (e) {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   function lsGet(k) { try { return JSON.parse(localStorage.getItem('odb:' + k) || 'null'); } catch (e) { return null; } }
@@ -848,7 +909,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   }
   function view(seed, path) {
     var s = (seed.docs || {})[path], l = lsGet(path);
-    if (path === 'flash/stats') return mergeStats(s, l);
+    if (path === 'flash/stats' || path === 'sound/stats') return mergeStats(s, l);
     if (path === 'time/stats') return mergeTime(s, l);
     if (path === 'flash/later' || path === 'practice/stats') return l || s;
     if (path === 'check/stats') return mergeCheck(s, l);
@@ -899,6 +960,12 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     var out = { v: 1, app: APP_VERSION, data: seed.generated || '', at: new Date().toISOString(), words: words, days: days, time: time };
     if (later) out.later = arr(later.words);
     if (check.length) out.check = check;
+    var sBase = {}, sBaseDays = {};
+    arr(s['sound/stats'] && s['sound/stats'].words).forEach(function (w) { if (w && w.it) sBase[w.it] = n(w.t); });
+    arr(s['sound/stats'] && s['sound/stats'].days).forEach(function (d) { if (d && d.d) sBaseDays[d.d] = n(d.n); });
+    var snd = mergeStats(s['sound/stats'], lsGet('sound/stats'));
+    var sWords = snd.words.filter(function (w) { return n(w.t) > (sBase[w.it] || 0); }).map(function (w) { return { it: w.it, h: w.h, t: w.t, r: w.r, s: w.s || 0 }; });
+    if (sWords.length) out.sound = { words: sWords, days: snd.days.filter(function (d) { return d.n > (sBaseDays[d.d] || 0); }) };
     var rBase = {};
     arr(s['review/stats'] && s['review/stats'].days).forEach(function (x) { if (x && x.d) rBase[x.d] = n(x.at); });
     var review = mergeReview(s['review/stats'], lsGet('review/stats')).days.filter(function (x) { return n(x.at) > (rBase[x.d] || 0); });
@@ -921,8 +988,8 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     function refresh() {
       seedP.then(function (seed) {
         var r = results(seed);
-        document.getElementById('off-sum').textContent = (r.words.length || r.check || r.review)
-          ? r.words.length + ' words practised' + (r.check ? ', ' + r.check.length + ' word checks' : '') + ' and ' + mins(r) + ' minutes not sent to Claude yet. When you are back online, tap Copy and paste it in your Learning Italian chat.'
+        document.getElementById('off-sum').textContent = (r.words.length || r.check || r.review || r.sound)
+          ? r.words.length + ' words practised' + (r.sound ? ', ' + r.sound.words.length + ' sound cards' : '') + (r.check ? ', ' + r.check.length + ' word checks' : '') + ' and ' + mins(r) + ' minutes not sent to Claude yet. When you are back online, tap Copy and paste it in your Learning Italian chat.'
           : 'Nothing new to send. Works with no internet once added to your Home Screen.';
       });
     }
@@ -1476,22 +1543,24 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 
   // ----- Tabs
   function showTab(name) {
-    ['progress', 'flash', 'practice'].forEach(function (k) {
+    ['progress', 'flash', 'sound', 'practice'].forEach(function (k) {
       $('view-' + k).hidden = k !== name;
       $('tab-' + k).setAttribute('aria-pressed', k === name ? 'true' : 'false');
     });
     try { localStorage.setItem('tab', name); } catch (e) {}
     if (name === 'practice' && typeof prRefresh === 'function') prRefresh();
+    if (name === 'sound' && typeof sdRefresh === 'function') sdRefresh();
   }
   $('tab-progress').addEventListener('click', function () { showTab('progress'); });
   $('tab-flash').addEventListener('click', function () { showTab('flash'); });
   $('tab-practice').addEventListener('click', function () { showTab('practice'); });
+  $('tab-sound').addEventListener('click', function () { showTab('sound'); });
   (function () {
     var t = null;
     if (location.hash === '#flashcards') t = 'flash';
     if (location.hash === '#practice') t = 'practice';
     if (!t) { try { t = localStorage.getItem('tab'); } catch (e) {} }
-    showTab(t === 'flash' || t === 'practice' ? t : 'progress');
+    showTab(t === 'flash' || t === 'practice' || t === 'sound' ? t : 'progress');
   })();
 
   // ----- Flashcards: own score bank in flash/stats, copy kept on this phone
@@ -1717,6 +1786,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
 
   function fcRefresh() {
     ckRefresh();
+    sdRefresh();
     var c = fcCounts();
     var scoreWords = fcAllWords(), inScores = {};
     scoreWords.forEach(function (w) { inScores[w.it] = 1; });
@@ -2008,6 +2078,210 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
   }
 
 
+
+
+  // ----- Sound cards: listening only, with their own scores in sound/stats { words: [{ it, h, t, r, s }], days: [{ d, n }] }
+  var sd = {}, sdDays = {}, sdRef = null, sdDirty = false, sdSaving = false, sdTimer = null, sdRound = null, sdUndo = [], sdFlipped = false;
+  var sdN = 15;
+  try { var sn0 = parseInt(localStorage.getItem('sd-n'), 10); if (sn0 >= 5 && sn0 <= 50) sdN = sn0; } catch (e) {}
+  function sdEntry(it) { return sd[it] || { h: '', t: 0, r: 0, s: 0 }; }
+  function sdNorm(x) {
+    if (!x || typeof x.h !== 'string' || /[^01]/.test(x.h)) return null;
+    return { h: x.h.slice(-20), t: num(x.t), r: num(x.r), s: num(x.s) };
+  }
+  function sdLevel(it) {
+    var h = sdEntry(it).h;
+    if (!h) return 'new';
+    var last = h.slice(-5), right = 0;
+    for (var i = 0; i < last.length; i++) if (last.charAt(i) === '1') right++;
+    if (right >= 4 && h.slice(-1) === '1') return 'known';
+    return right / last.length < 0.5 ? 'hard' : 'close';
+  }
+  function sdLocalSave() {
+    try {
+      localStorage.setItem('sd-stats', JSON.stringify(sd));
+      localStorage.setItem('sd-days', JSON.stringify(sdDays));
+      localStorage.setItem('sd-dirty', sdDirty ? '1' : '');
+    } catch (e) {}
+  }
+  function sdMergeRemote(data) {
+    arr(data && data.words).forEach(function (x) {
+      var n = sdNorm(x); if (!n || !x.it) return;
+      if (!sd[x.it] || n.t > sd[x.it].t) sd[x.it] = n;
+    });
+    arr(data && data.days).forEach(function (x) { if (x && x.d) sdDays[x.d] = Math.max(sdDays[x.d] || 0, num(x.n)); });
+  }
+  function sdPush() {
+    if (!sdDirty || !sdRef || sdSaving) return;
+    sdSaving = true;
+    tmo(sdRef.get()).then(function (snap) {
+      if (snap.exists) sdMergeRemote(snap.data() || {});
+      var words = Object.keys(sd).map(function (k) { var e = sd[k]; return { it: k, h: e.h, t: e.t, r: e.r, s: e.s }; });
+      var days = Object.keys(sdDays).sort().map(function (k) { return { d: k, n: sdDays[k] }; });
+      return tmo(sdRef.set({ words: words, days: days, updated: new Date().toISOString() }), 15000);
+    }).then(function () { sdSaving = false; sdDirty = false; sdLocalSave(); $('sd-save').textContent = ''; },
+      function () { sdSaving = false; $('sd-save').textContent = 'Saved on this phone. It goes to your account when you are back online.'; });
+  }
+  function sdQueueSave() { if (sdTimer) clearTimeout(sdTimer); sdTimer = setTimeout(function () { sdTimer = null; sdPush(); }, 800); }
+  window.addEventListener('online', function () { sdPush(); });
+  setInterval(function () { if (navigator.onLine !== false) sdPush(); }, 60000);
+  function sdInit(db) {
+    try {
+      var l = JSON.parse(localStorage.getItem('sd-stats') || 'null');
+      if (l && typeof l === 'object') Object.keys(l).forEach(function (k) { var n = sdNorm(l[k]); if (n && (!sd[k] || n.t > sd[k].t)) sd[k] = n; });
+      var dl = JSON.parse(localStorage.getItem('sd-days') || 'null');
+      if (dl && typeof dl === 'object') Object.keys(dl).forEach(function (k) { sdDays[k] = Math.max(sdDays[k] || 0, num(dl[k])); });
+      sdDirty = sdDirty || localStorage.getItem('sd-dirty') === '1';
+    } catch (e) {}
+    if (!db) { sdRefresh(); return; }
+    sdRef = db.doc('sound/stats');
+    tmo(sdRef.get()).then(function (snap) {
+      if (snap.exists) { bkSave(db, 'sound', snap.data()); sdMergeRemote(snap.data() || {}); }
+      sdLocalSave(); sdRefresh();
+      if (sdDirty) sdPush();
+    }, function () { sdRefresh(); });
+  }
+  function sdWords() { return ckWords(); }
+  function sdBuild() {
+    var lv = { hard: [], close: [], 'new': [], known: [] };
+    sdWords().forEach(function (w) { lv[sdLevel(w.it)].push(w); });
+    lv.hard = shuffle(lv.hard); lv.close = shuffle(lv.close); lv['new'] = shuffle(lv['new']);
+    lv.known.sort(function (a, b) { return sdEntry(a.it).s - sdEntry(b.it).s; });
+    var want = { hard: Math.round(sdN * 0.35), close: Math.round(sdN * 0.3), known: Math.max(1, Math.round(sdN * 0.1)) };
+    want['new'] = sdN - want.hard - want.close - want.known;
+    var out = [], used = {};
+    function take(k, n) { lv[k].forEach(function (w) { if (n > 0 && !used[w.it]) { used[w.it] = 1; out.push(w); n--; } }); }
+    ['hard', 'close', 'new', 'known'].forEach(function (k) { take(k, want[k]); });
+    ['hard', 'close', 'new', 'known'].forEach(function (k) { take(k, sdN - out.length); });
+    return shuffle(out);
+  }
+  function sdCounts() {
+    var c = { learn: 0, 'new': 0, known: 0, total: 0 };
+    sdWords().forEach(function (w) { var l = sdLevel(w.it); c.total++; if (l === 'known') c.known++; else { c.learn++; if (l === 'new') c['new']++; } });
+    return c;
+  }
+  function sdRefresh() {
+    if (!sd || !$('view-sound')) return;
+    var c = sdCounts();
+    $('sd-n-learn').textContent = c.learn;
+    $('sd-n-new').textContent = c['new'];
+    $('sd-n-known').textContent = c.known;
+    $('sd-n').textContent = sdN;
+    var dn = sdDays[today()] || 0;
+    $('sd-today').textContent = 'Today: ' + dn + (dn === 1 ? ' sound card' : ' sound cards');
+    var inRound = !!(sdRound && !sdRound.done);
+    $('sd-setup').hidden = inRound || !!(sdRound && sdRound.done);
+    $('sd-active').hidden = !inRound;
+    $('sd-result').hidden = !(sdRound && sdRound.done);
+    $('sd-start').disabled = !c.total;
+    $('sd-note').textContent = !c.total ? 'Loading your words…' : (!window.speechSynthesis ? "This device can't play words aloud here." : '');
+    $('sd-undo').disabled = !sdUndo.length;
+  }
+  function sdFlip(on, instant) {
+    var card = $('sd-card');
+    sdFlipped = on;
+    if (instant) card.classList.add('noanim');
+    card.classList.toggle('flipped', on);
+    card.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (instant) { void card.offsetWidth; card.classList.remove('noanim'); }
+  }
+  function sdShow() {
+    if (!sdRound || sdRound.done) { sdRefresh(); return; }
+    var w = sdRound.queue[0];
+    $('sd-it').textContent = w.it;
+    $('sd-en').textContent = w.en;
+    var again = !!sdRound.seen[w.it];
+    $('sd-tag').textContent = '';
+    if (again) $('sd-tag').appendChild(el('span', 'fc-tag', 'Again'));
+    var done = Object.keys(sdRound.seen).length;
+    $('sd-pos').textContent = (again ? done : done + 1) + ' of ' + sdRound.total;
+    sdFlip(false, true);
+    prSpeak(w.it, 0.85);
+    $('sd-card').setAttribute('aria-label', 'Listen to the word. Tap to check.');
+    sdRefresh();
+  }
+  function sdStart(repeat) {
+    var words = repeat && sdRound ? shuffle(sdRound.words.slice()) : sdBuild();
+    if (!words.length) return;
+    var before = {};
+    words.forEach(function (w) { before[w.it] = sdLevel(w.it) === 'known'; });
+    sdRound = { queue: words.slice(), words: words.slice(), seen: {}, first: {}, total: words.length, before: before, done: false };
+    sdUndo = [];
+    tmTick('fc');
+    sdShow();
+    $('sd-card').focus();
+  }
+  function sdRecord(it, ok) {
+    var e = sdEntry(it);
+    sd[it] = { h: (e.h + (ok ? '1' : '0')).slice(-20), t: e.t + 1, r: e.r + (ok ? 1 : 0), s: Date.now() };
+    var d = today();
+    sdDays[d] = (sdDays[d] || 0) + 1;
+    sdDirty = true; sdLocalSave(); sdQueueSave();
+  }
+  function sdAnswer(ok) {
+    tmTick('fc');
+    if (!sdRound || sdRound.done) return;
+    var w = sdRound.queue.shift(), it = w.it, first = !sdRound.seen[it], pos = -1;
+    var prev = sd[it] ? JSON.parse(JSON.stringify(sd[it])) : null;
+    if (first) { sdRound.seen[it] = 1; sdRound.first[it] = ok; sdRecord(it, ok); }
+    if (!ok) {
+      // A missed word comes back a few cards later, at a random spot
+      var len = sdRound.queue.length, min = Math.min(3, len);
+      pos = min + Math.floor(Math.random() * (len - min + 1));
+      sdRound.queue.splice(pos, 0, w);
+    }
+    sdUndo.push({ w: w, ok: ok, first: first, prev: prev, day: today(), pos: pos });
+    if (!sdRound.queue.length) sdFinish(); else sdShow();
+  }
+  function sdUndoLast() {
+    var u = sdUndo.pop();
+    if (!u || !sdRound) return;
+    if (u.pos >= 0) sdRound.queue.splice(u.pos, 1);
+    sdRound.queue.unshift(u.w);
+    if (u.first) {
+      delete sdRound.seen[u.w.it]; delete sdRound.first[u.w.it];
+      if (u.prev) sd[u.w.it] = u.prev; else delete sd[u.w.it];
+      if (sdDays[u.day]) sdDays[u.day]--;
+      if (!sdDays[u.day]) delete sdDays[u.day];
+      sdDirty = true; sdLocalSave(); sdQueueSave();
+    }
+    sdRound.done = false;
+    sdShow();
+  }
+  function sdFinish() {
+    tmStop('fc');
+    sdRound.done = true;
+    var keys = Object.keys(sdRound.first);
+    var right = keys.filter(function (k) { return sdRound.first[k]; }).length;
+    var newKnown = keys.filter(function (k) { return !sdRound.before[k] && sdLevel(k) === 'known'; }).length;
+    var msg = right + ' of ' + keys.length + ' right the first time.';
+    if (newKnown) msg += ' ' + newKnown + (newKnown === 1 ? ' word is' : ' words are') + ' now known by ear.';
+    $('sd-result-text').textContent = msg;
+    var ul = $('sd-missed'); clear(ul);
+    sdRound.words.filter(function (w) { return sdRound.first[w.it] === false; }).forEach(function (w) {
+      var li = el('li'); var i = el('span', 'it', w.it); i.lang = 'it';
+      li.appendChild(i); li.appendChild(el('span', 'en', w.en)); ul.appendChild(li);
+    });
+    ul.hidden = !ul.children.length;
+    sdRefresh();
+    sdPush();
+  }
+  function sdEnd() {
+    if (!sdRound) return;
+    if (Object.keys(sdRound.first).length) sdFinish(); else { sdRound = null; sdRefresh(); }
+  }
+  $('sd-start').addEventListener('click', function () { sdStart(false); });
+  $('sd-again').addEventListener('click', function () { sdStart(false); });
+  $('sd-repeat').addEventListener('click', function () { sdStart(true); });
+  $('sd-got').addEventListener('click', function () { sdAnswer(true); });
+  $('sd-miss').addEventListener('click', function () { sdAnswer(false); });
+  $('sd-undo').addEventListener('click', sdUndoLast);
+  $('sd-end').addEventListener('click', sdEnd);
+  $('sd-card').addEventListener('click', function () { tmTick('fc'); if (sdRound && !sdRound.done) sdFlip(!sdFlipped, false); });
+  $('sd-say').addEventListener('click', function () { tmTick('fc'); if (sdRound && sdRound.queue[0]) prSpeak(sdRound.queue[0].it, 0.85); });
+  $('sd-say-slow').addEventListener('click', function () { tmTick('fc'); if (sdRound && sdRound.queue[0]) prSpeak(sdRound.queue[0].it, 0.55); });
+  $('sd-minus').addEventListener('click', function () { sdN = Math.max(5, sdN - 5); try { localStorage.setItem('sd-n', sdN); } catch (e) {} sdRefresh(); });
+  $('sd-plus').addEventListener('click', function () { sdN = Math.min(50, sdN + 5); try { localStorage.setItem('sd-n', sdN); } catch (e) {} sdRefresh(); });
 
   // ----- Morning review: the words from last night's practice, once through the next morning
   // Saved in review/stats { days: [{ d, at, n, right }] }; voice-session words come from review/voice { words: [{ it, t }] }
@@ -2476,6 +2750,7 @@ footer { margin-top: 2.75rem; color: var(--muted); font-size: 0.92rem; }
     }, function () {});
   }
   function fcInit(db) {
+    sdInit(db);
     ckInit(db);
     rvInit(db);
     var local = fcLoadLocal();

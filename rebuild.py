@@ -34,7 +34,7 @@ open(os.path.join(HERE, 'sw.js'), 'w').write(sw)
 docs = {}
 for path in ['progress/current', 'progress/sort', 'flash/stats', 'flash/focus', 'flash/later',
              'flash/examples', 'time/stats', 'practice/stats', 'check/stats',
-             'review/stats', 'review/voice']:
+             'review/stats', 'review/voice', 'sound/stats']:
     f = os.path.join(seed_dir, path + '.json')
     if os.path.exists(f):
         docs[path] = json.load(open(f))
